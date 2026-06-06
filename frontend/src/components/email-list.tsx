@@ -14,6 +14,10 @@ import {
   MessageSquareIcon,
   ShieldAlertIcon,
   AlignJustifyIcon,
+  ArchiveIcon,
+  Trash2Icon,
+  MailOpenIcon,
+  MailIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -179,6 +183,9 @@ export function EmailList() {
     selectedThreadId,
     selectThread,
     toggleStarThread,
+    markThreadRead,
+    markThreadUnread,
+    moveThread,
     filter,
     setFilter,
     activeTagFilter,
@@ -216,6 +223,29 @@ export function EmailList() {
     e.stopPropagation();
     toggleStarThread(thread.id);
     toast(thread.isStarred ? "Removed from starred" : "Added to starred", { duration: 2000 });
+  };
+
+  const handleMarkRead = (e: React.MouseEvent, thread: Thread) => {
+    e.stopPropagation();
+    if (thread.unreadCount > 0) {
+      markThreadRead(thread.id);
+      toast("Marked as read", { duration: 2000 });
+    } else {
+      markThreadUnread(thread.id);
+      toast("Marked as unread", { duration: 2000 });
+    }
+  };
+
+  const handleArchive = (e: React.MouseEvent, thread: Thread) => {
+    e.stopPropagation();
+    moveThread(thread.id, "archive");
+    toast("Archived", { duration: 2000 });
+  };
+
+  const handleTrash = (e: React.MouseEvent, thread: Thread) => {
+    e.stopPropagation();
+    moveThread(thread.id, "trash");
+    toast("Moved to trash", { duration: 2000 });
   };
 
   const handleThreadClick = (thread: Thread) => {
@@ -513,18 +543,64 @@ export function EmailList() {
                     )}
                   </div>
 
-                  {/* Star */}
-                  <button
-                    onClick={(e) => handleStar(e, thread)}
-                    className={cn(
-                      "shrink-0 self-start mt-0.5 p-0.5 rounded transition-colors",
-                      thread.isStarred
-                        ? "text-yellow-500"
-                        : "text-transparent group-hover:text-muted-foreground/50 hover:!text-yellow-400"
-                    )}
-                  >
-                    <StarIcon className={cn("size-3.5", thread.isStarred && "fill-current")} />
-                  </button>
+                  {/* Hover actions + star */}
+                  <div className="flex items-center gap-0.5 shrink-0 self-start mt-0.5">
+                    <div className="flex items-center gap-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            onClick={(e) => handleMarkRead(e, thread)}
+                            className="p-0.5 rounded text-muted-foreground/50 hover:text-foreground transition-colors"
+                          >
+                            {thread.unreadCount > 0
+                              ? <MailOpenIcon className="size-3.5" />
+                              : <MailIcon className="size-3.5" />
+                            }
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent side="top">
+                          {thread.unreadCount > 0 ? "Mark as read" : "Mark as unread"}
+                        </TooltipContent>
+                      </Tooltip>
+                      {currentFolder !== "archive" && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              onClick={(e) => handleArchive(e, thread)}
+                              className="p-0.5 rounded text-muted-foreground/50 hover:text-foreground transition-colors"
+                            >
+                              <ArchiveIcon className="size-3.5" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent side="top">Archive</TooltipContent>
+                        </Tooltip>
+                      )}
+                      {currentFolder !== "trash" && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              onClick={(e) => handleTrash(e, thread)}
+                              className="p-0.5 rounded text-muted-foreground/50 hover:text-red-500 transition-colors"
+                            >
+                              <Trash2Icon className="size-3.5" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent side="top">Move to trash</TooltipContent>
+                        </Tooltip>
+                      )}
+                    </div>
+                    <button
+                      onClick={(e) => handleStar(e, thread)}
+                      className={cn(
+                        "p-0.5 rounded transition-colors",
+                        thread.isStarred
+                          ? "text-yellow-500"
+                          : "text-transparent group-hover:text-muted-foreground/50 hover:!text-yellow-400"
+                      )}
+                    >
+                      <StarIcon className={cn("size-3.5", thread.isStarred && "fill-current")} />
+                    </button>
+                  </div>
                 </div>
               );
             })

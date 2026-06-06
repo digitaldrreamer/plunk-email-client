@@ -11,6 +11,7 @@ import { ComposeModal } from "@/components/compose-modal";
 import { MobileBottomNav } from "@/components/mobile-bottom-nav";
 import { SettingsModal } from "@/components/settings-modal";
 import { TwoFANudge } from "@/components/two-fa-nudge";
+import { RecoveryEmailNudge } from "@/components/recovery-email-nudge";
 import { CommandPalette } from "@/components/command-palette";
 import { ContactsPanel } from "@/components/contacts-panel";
 import { Button } from "@/components/ui/button";
@@ -37,8 +38,9 @@ export function EmailClient() {
   return (
     <div className="flex h-[100dvh] w-full overflow-hidden bg-background flex-col" suppressHydrationWarning>
 
-      {/* ── 2FA nudge banner ── */}
+      {/* ── Nudge banners ── */}
       <TwoFANudge onSetupNow={() => openSettings("security")} />
+      <RecoveryEmailNudge onSetupNow={() => openSettings("profile")} />
 
       <div className="flex flex-1 min-h-0 overflow-hidden">
         {/* ── Tablet: icon-only sidebar (md, hidden on mobile + lg) ── */}

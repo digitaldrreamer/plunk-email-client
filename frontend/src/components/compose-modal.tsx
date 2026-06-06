@@ -1,12 +1,13 @@
 "use client";
 
 import React, { useRef, useState, useMemo, useCallback, useEffect, KeyboardEvent } from "react";
-import { XIcon, SendIcon, PaperclipIcon, MinimizeIcon, SaveIcon, LoaderIcon, ShieldAlertIcon } from "lucide-react";
+import { XIcon, SendIcon, PaperclipIcon, MinimizeIcon, SaveIcon, LoaderIcon, ShieldAlertIcon, RotateCcwIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useEmailStore } from "@/store/email-store";
 import { useAuthStore } from "@/store/auth-store";
+import { toast } from "sonner";
 import { EmailEditor, type EmailEditorRef } from "@/components/email-editor";
 import {
   Dialog,
@@ -18,6 +19,7 @@ import {
 } from "@/components/ui/dialog";
 
 const BACKEND = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+const DRAFT_KEY = "reclear-compose-draft";
 
 // ── Recipient chip input ──────────────────────────────────────────────────────
 
@@ -180,20 +182,72 @@ function RecipientInput({
 
 // ── Compose modal ─────────────────────────────────────────────────────────────
 
+interface SavedDraft {
+  recipients: string[];
+  subject: string;
+  body: string;
+  savedAt: number;
+}
+
+function loadDraft(): SavedDraft | null {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    return raw ? JSON.parse(raw) as SavedDraft : null;
+  } catch { return null; }
+}
+
+function saveDraft(draft: SavedDraft) {
+  try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); } catch { /* ignore */ }
+}
+
+function clearDraft() {
+  try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
+}
+
 export function ComposeModal() {
   const { composing, setComposing, signature } = useEmailStore();
   const [minimized, setMinimized] = useState(false);
-  const [recipients, setRecipients] = useState<string[]>([]);
-  const [subject, setSubject] = useState("");
+  // Lazy init from localStorage so the editor gets the right initialHtml on mount
+  const [recipients, setRecipients] = useState<string[]>(() => loadDraft()?.recipients ?? []);
+  const [subject, setSubject] = useState<string>(() => loadDraft()?.subject ?? "");
+  const [hasDraft, setHasDraft] = useState(() => loadDraft() !== null);
   const [attachments, setAttachments] = useState<File[]>([]);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [threatWarning, setThreatWarning] = useState<{ threats: { url: string; threatTypes: string[] }[] } | null>(null);
   const editorRef = useRef<EmailEditorRef>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const bodyRef = useRef<string>(loadDraft()?.body ?? "");
 
+  // Auto-save recipients/subject on change
+  useEffect(() => {
+    if (!composing) return;
+    const t = setTimeout(() => {
+      saveDraft({ recipients, subject, body: bodyRef.current, savedAt: Date.now() });
+    }, 500);
+    return () => clearTimeout(t);
+  }, [composing, recipients, subject]);
+
+  const handleBodyChange = useCallback((html: string) => {
+    bodyRef.current = html;
+  }, []);
+
+  // Periodic body save every 15s
+  useEffect(() => {
+    if (!composing) return;
+    const interval = setInterval(() => {
+      saveDraft({ recipients, subject, body: bodyRef.current, savedAt: Date.now() });
+    }, 15000);
+    return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [composing]);
+
+  // Computed once on mount — component unmounts when composing=false so this is fresh each open
   const initialHtml = useMemo(
-    () => `<p><br></p><p><br></p>${signature}`,
+    () => {
+      const saved = loadDraft();
+      return saved?.body ?? `<p><br></p><p><br></p>${signature}`;
+    },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     []
   );
@@ -201,12 +255,15 @@ export function ComposeModal() {
   if (!composing) return null;
 
   const handleClose = () => {
+    // Save before closing so draft survives
+    saveDraft({ recipients, subject, body: bodyRef.current, savedAt: Date.now() });
     setComposing(false);
     setMinimized(false);
     setRecipients([]);
     setSubject("");
     setAttachments([]);
     setError("");
+    setHasDraft(false);
   };
 
   const doSend = async (override = false) => {
@@ -233,6 +290,7 @@ export function ComposeModal() {
         return;
       }
       if (!json.success) throw new Error(json.error ?? "Send failed");
+      clearDraft();
       setThreatWarning(null);
       handleClose();
     } catch (err) {
@@ -246,8 +304,15 @@ export function ComposeModal() {
   const handleSendAnyway = () => { setThreatWarning(null); doSend(true); };
 
   const handleSaveDraft = () => {
-    // TODO: persist draft via backend
-    handleClose();
+    saveDraft({ recipients, subject, body: bodyRef.current, savedAt: Date.now() });
+    toast("Draft saved", { duration: 2000 });
+    setComposing(false);
+    setMinimized(false);
+    setRecipients([]);
+    setSubject("");
+    setAttachments([]);
+    setError("");
+    setHasDraft(false);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -345,11 +410,26 @@ export function ComposeModal() {
           />
         </div>
 
+        {/* Draft restored notice */}
+        {hasDraft && (
+          <div className="flex items-center gap-2 px-4 py-1.5 bg-amber-50 dark:bg-amber-950/20 border-b border-amber-200 dark:border-amber-900/40 text-xs text-amber-700 dark:text-amber-400">
+            <RotateCcwIcon className="size-3 shrink-0" />
+            <span className="flex-1">Draft restored</span>
+            <button
+              onClick={() => { setHasDraft(false); clearDraft(); }}
+              className="underline hover:no-underline"
+            >
+              Discard
+            </button>
+          </div>
+        )}
+
         {/* Rich text editor */}
         <EmailEditor
           ref={editorRef}
           placeholder="Write your message…"
           initialHtml={initialHtml}
+          onChange={handleBodyChange}
           minHeight="200px"
           autoFocus
           className="rounded-none border-0 border-b border-border shadow-none"
