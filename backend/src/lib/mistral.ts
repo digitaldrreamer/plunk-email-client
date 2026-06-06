@@ -178,7 +178,9 @@ Requirements:
 - Write in a natural, professional tone matching the thread's register
 - Be concise — no unnecessary filler phrases or padding
 - Do NOT include a subject line in the body
-- Format the body as clean HTML using only <p>, <br>, <strong>, <em>, <ul>, <li> tags
+- Format the body as clean HTML using only <p>, <strong>, <em>, <ul>, <li> tags
+- Use <p> for every paragraph — do NOT add <br> between <p> elements; spacing is handled by CSS
+- <br> is only acceptable inside a <p> for a forced line break within the same paragraph
 - Do NOT wrap in <html>, <head>, or <body> tags
 
 Return ONLY a JSON object with this exact shape:

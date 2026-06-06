@@ -4,12 +4,14 @@
  * Calls mistral.ts functions directly with sample data.
  *
  * Usage:
- *   npx tsx scripts/test-ai.ts                  # run all three
+ *   npx tsx scripts/test-ai.ts                       # run all three
  *   npx tsx scripts/test-ai.ts categorize
  *   npx tsx scripts/test-ai.ts spell
  *   npx tsx scripts/test-ai.ts compose
+ *   npx tsx scripts/test-ai.ts compose --preview     # open rendered HTML in browser
+ *   npx tsx scripts/test-ai.ts spell   --preview
  *
- * Overrides (apply to whichever function you're running):
+ * Overrides:
  *   --subject "Your invoice is ready"
  *   --body    "Plain-text email body…"
  *   --html    "<p>Helo wrold</p>"
@@ -17,6 +19,10 @@
  */
 
 import "dotenv/config";
+import { writeFileSync } from "fs";
+import { tmpdir } from "os";
+import { join } from "path";
+import { execSync } from "child_process";
 import { categorizeEmail, fixEmailSpelling, composeFromThread } from "../src/lib/mistral";
 
 // ── CLI helpers ───────────────────────────────────────────────────────────────
@@ -26,7 +32,77 @@ function arg(flag: string): string | undefined {
   return idx !== -1 ? process.argv[idx + 1] : undefined;
 }
 
+function hasFlag(flag: string): boolean {
+  return process.argv.includes(flag);
+}
+
 const cmd = process.argv[2]; // categorize | spell | compose | undefined
+const preview = hasFlag("--preview");
+
+// ── Preview helper — matches email-body-frame.tsx CSS exactly ─────────────────
+
+function openPreview(bodyHtml: string, title: string) {
+  const lightVars = `html,body{background:#ffffff;color:#111827}a{color:#2563eb}blockquote{border-color:#d1d5db;color:#6b7280}pre,code{background:#f3f4f6;color:#111827}`;
+  const darkVars  = `html,body{background:#0a0a0a;color:#e5e7eb}a{color:#60a5fa}blockquote{border-color:#374151;color:#9ca3af}pre,code{background:#1f2937;color:#e5e7eb}`;
+
+  const sharedCss = `
+    *{box-sizing:border-box;-webkit-text-size-adjust:100%}
+    html,body{margin:0;padding:0;word-break:break-word;overflow-wrap:break-word}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:14px;line-height:1.6;padding:0 2px 8px}
+    img{max-width:100%!important;height:auto!important;display:inline-block}
+    a{word-break:break-all}
+    table{border-collapse:collapse;max-width:100%!important}
+    td,th{vertical-align:top}
+    p{margin:0 0 0.75em}
+    blockquote{border-left:3px solid;padding-left:12px;margin:8px 0}
+    pre,code{font-family:ui-monospace,monospace;font-size:13px;border-radius:3px;padding:1px 4px}
+    pre{padding:10px;overflow-x:auto}
+  `;
+
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>${title} — AI preview</title>
+  <style>
+    body { margin: 0; font-family: sans-serif; display: flex; min-height: 100vh; }
+    .pane { flex: 1; padding: 24px; }
+    .pane + .pane { border-left: 1px solid #333; }
+    .label { font-size: 11px; font-weight: 600; letter-spacing: .06em;
+             text-transform: uppercase; margin-bottom: 12px; opacity: .5; }
+    .light { background: #fff; color: #111; }
+    .dark  { background: #0a0a0a; color: #e5e7eb; }
+    .email-light { ${sharedCss} ${lightVars} }
+    .email-dark  { ${sharedCss} ${darkVars} }
+  </style>
+</head>
+<body>
+  <div class="pane light">
+    <div class="label">Light mode</div>
+    <style>.email-light { ${sharedCss} ${lightVars} }</style>
+    <div class="email-light">${bodyHtml}</div>
+  </div>
+  <div class="pane dark">
+    <div class="label" style="color:#e5e7eb">Dark mode</div>
+    <style>.email-dark { ${sharedCss} ${darkVars} }</style>
+    <div class="email-dark">${bodyHtml}</div>
+  </div>
+</body>
+</html>`;
+
+  const file = join(tmpdir(), "reclear-ai-preview.html");
+  writeFileSync(file, html);
+
+  const opener = process.platform === "darwin" ? "open"
+               : process.platform === "win32"  ? "start"
+               : "xdg-open";
+  try {
+    execSync(`${opener} "${file}"`, { stdio: "ignore" });
+    console.log(`  preview → ${file}`);
+  } catch {
+    console.log(`  preview written → ${file}  (open it manually)`);
+  }
+}
 
 // ── Samples ───────────────────────────────────────────────────────────────────
 
@@ -139,6 +215,20 @@ async function runSpell() {
       console.log(`    "${c.original}" → "${c.fixed}"`);
     }
   }
+
+  if (preview) {
+    const diff = `
+      <div style="margin-bottom:24px">
+        <div style="font-size:11px;font-weight:600;text-transform:uppercase;opacity:.5;margin-bottom:8px">Before</div>
+        <div style="opacity:.6">${html}</div>
+      </div>
+      <hr style="border:none;border-top:1px solid currentColor;opacity:.15;margin:16px 0">
+      <div>
+        <div style="font-size:11px;font-weight:600;text-transform:uppercase;opacity:.5;margin-bottom:8px">After (${result.changeCount} fix${result.changeCount !== 1 ? "es" : ""})</div>
+        ${result.corrected}
+      </div>`;
+    openPreview(diff, "spell");
+  }
 }
 
 async function runCompose() {
@@ -154,6 +244,8 @@ async function runCompose() {
   console.log("  subject :", result.subject);
   console.log("  body    :\n");
   console.log(result.body);
+
+  if (preview) openPreview(result.body, result.subject);
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
