@@ -65,6 +65,7 @@ router.post("/", requireAdmin, async (req, res) => {
 
   const oneTimePassword = generateOneTimePassword();
   const now = new Date().toISOString();
+  const inviteExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
   const adminName = req.user!.email;
 
   const user = {
@@ -79,6 +80,7 @@ router.post("/", requireAdmin, async (req, res) => {
     createdAt: now,
     updatedAt: now,
     mustChangePassword: true,
+    inviteExpiresAt,
     twoFactorSecret: null as string | null,
     twoFactorEnabled: false,
     resetToken: null as string | null,
@@ -114,7 +116,7 @@ router.post("/", requireAdmin, async (req, res) => {
     <tr><td style="padding:6px 0;color:#6b7280;width:120px;">Email</td><td style="font-weight:600;">${user.email}</td></tr>
     <tr><td style="padding:6px 0;color:#6b7280;">Temp password</td><td><code style="background:#f3f4f6;padding:2px 6px;border-radius:4px;font-size:14px;">${oneTimePassword}</code></td></tr>
   </table>
-  <p style="color:#6b7280;font-size:13px;margin-top:4px;">You'll be asked to set a new password on your first login.</p>
+  <p style="color:#6b7280;font-size:13px;margin-top:4px;">You'll be asked to set a new password on your first login. This invite expires in <strong>7 days</strong>.</p>
   <a href="${frontendUrl}" style="display:inline-block;margin-top:16px;background:#111827;color:#fff;text-decoration:none;padding:10px 20px;border-radius:6px;font-size:14px;">Sign in to Reclear →</a>
 </div>`.trim(),
   }).catch((err) => console.warn("[invite] email failed:", (err as Error).message));
@@ -151,6 +153,47 @@ router.patch("/:id", requireAdmin, async (req, res) => {
   const [updated] = await db.update(users).set(patch)
     .where(eq(users.id, req.params.id)).returning({ id: users.id });
   if (!updated) return res.status(404).json({ success: false, error: "User not found" });
+  res.json({ success: true });
+});
+
+// POST /api/users/:id/resend-invite — regenerates OTP and resets invite expiry for users who haven't logged in yet
+router.post("/:id/resend-invite", requireAdmin, async (req, res) => {
+  const [user] = await db.select().from(users).where(eq(users.id, req.params.id)).limit(1);
+  if (!user) return res.status(404).json({ success: false, error: "User not found" });
+  if (!user.mustChangePassword) {
+    return res.status(400).json({ success: false, error: "User has already accepted their invite" });
+  }
+  if (!user.recoveryEmail) {
+    return res.status(400).json({ success: false, error: "User has no recovery email set" });
+  }
+
+  const oneTimePassword = generateOneTimePassword();
+  const inviteExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  const frontendUrl = process.env.FRONTEND_URL ?? "http://localhost:3000";
+
+  await db.update(users).set({
+    passwordHash: hashPassword(oneTimePassword),
+    inviteExpiresAt,
+    updatedAt: new Date().toISOString(),
+  }).where(eq(users.id, user.id));
+
+  await sendEmail({
+    to: user.recoveryEmail,
+    subject: `Your Reclear invite (resent)`,
+    body: `
+<div style="font-family:sans-serif;max-width:480px;margin:0 auto;">
+  <h2 style="margin-bottom:4px;">New invite link</h2>
+  <p style="color:#6b7280;margin-top:0;">Your previous invite expired. Here are your updated credentials.</p>
+  <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0;">
+  <table style="border-collapse:collapse;width:100%;">
+    <tr><td style="padding:6px 0;color:#6b7280;width:120px;">Email</td><td style="font-weight:600;">${user.email}</td></tr>
+    <tr><td style="padding:6px 0;color:#6b7280;">Temp password</td><td><code style="background:#f3f4f6;padding:2px 6px;border-radius:4px;font-size:14px;">${oneTimePassword}</code></td></tr>
+  </table>
+  <p style="color:#6b7280;font-size:13px;margin-top:4px;">You'll be asked to set a new password on your first login. This invite expires in <strong>7 days</strong>.</p>
+  <a href="${frontendUrl}" style="display:inline-block;margin-top:16px;background:#111827;color:#fff;text-decoration:none;padding:10px 20px;border-radius:6px;font-size:14px;">Sign in to Reclear →</a>
+</div>`.trim(),
+  }).catch((err) => console.warn("[resend-invite] email failed:", (err as Error).message));
+
   res.json({ success: true });
 });
 

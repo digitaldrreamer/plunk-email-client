@@ -16,6 +16,8 @@ export const users = pgTable("users", {
   // 2FA
   twoFactorSecret: text("two_factor_secret"),
   twoFactorEnabled: boolean("two_factor_enabled").notNull().default(false),
+  // Invite expiry — only enforced while mustChangePassword is still true
+  inviteExpiresAt: text("invite_expires_at"),
   // Password reset (admin-triggered)
   resetToken: text("reset_token"),           // SHA-256 hash of the raw token
   resetTokenExpiresAt: text("reset_token_expires_at"),

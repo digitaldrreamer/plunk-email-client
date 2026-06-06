@@ -71,6 +71,12 @@ router.post("/login", loginLimiter, async (req, res) => {
     return res.status(403).json({ success: false, error: "Account disabled" });
   }
 
+  // Invite expired — only applies while the user hasn't completed first login
+  if (user.mustChangePassword && user.inviteExpiresAt && user.inviteExpiresAt < new Date().toISOString()) {
+    logger.warn("Login failed: invite expired", { action: "login", userId: user.id, userEmail: user.email, ip: req.ip });
+    return res.status(403).json({ success: false, error: "Your invite has expired. Ask an admin to resend it." });
+  }
+
   await db.update(users).set({ lastLoginAt: new Date().toISOString() }).where(eq(users.id, user.id));
 
   // 2FA required — return a short-lived temp token (not the session cookie yet)
@@ -179,6 +185,7 @@ router.post("/force-change-password", requireAuth, async (req, res) => {
   await db.update(users).set({
     passwordHash: hashPassword(newPassword),
     mustChangePassword: false,
+    inviteExpiresAt: null,
     updatedAt: new Date().toISOString(),
   }).where(eq(users.id, req.user!.sub));
 

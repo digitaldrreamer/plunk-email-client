@@ -230,6 +230,16 @@ function TeamContent() {
     }
   };
 
+  const handleResendInvite = async (u: UserRecord) => {
+    if (!u.id) return;
+    try {
+      await apiFetch(`/api/users/${u.id}/resend-invite`, { method: "POST" });
+      toast.success(`Invite resent to ${u.name}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to resend invite");
+    }
+  };
+
   const handleToggleDisable = async (u: UserRecord) => {
     if (!u.id) return;
     try {
@@ -422,14 +432,25 @@ function TeamContent() {
                                   <PencilIcon className="size-3.5 mr-2 text-muted-foreground" />
                                   Edit member
                                 </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={() => openResetPw(u)}
-                                  disabled={!u.recoveryEmail}
-                                  title={!u.recoveryEmail ? "No recovery email set" : undefined}
-                                >
-                                  <KeyRoundIcon className="size-3.5 mr-2 text-muted-foreground" />
-                                  Send reset link
-                                </DropdownMenuItem>
+                                {u.mustChangePassword ? (
+                                  <DropdownMenuItem
+                                    onClick={() => handleResendInvite(u)}
+                                    disabled={!u.recoveryEmail}
+                                    title={!u.recoveryEmail ? "No recovery email set" : undefined}
+                                  >
+                                    <MailIcon className="size-3.5 mr-2 text-muted-foreground" />
+                                    Resend invite
+                                  </DropdownMenuItem>
+                                ) : (
+                                  <DropdownMenuItem
+                                    onClick={() => openResetPw(u)}
+                                    disabled={!u.recoveryEmail}
+                                    title={!u.recoveryEmail ? "No recovery email set" : undefined}
+                                  >
+                                    <KeyRoundIcon className="size-3.5 mr-2 text-muted-foreground" />
+                                    Send reset link
+                                  </DropdownMenuItem>
+                                )}
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem onClick={() => handleToggleDisable(u)}>
                                   {u.disabled
@@ -460,7 +481,7 @@ function TeamContent() {
             {view === "create" && isAdmin && (
               <form onSubmit={handleCreate} className="space-y-4">
                 <div className="rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/40 px-4 py-3 text-xs text-blue-800 dark:text-blue-300">
-                  An invite with login credentials will be sent to the recovery email. The member must set a new password on first login.
+                  An invite with login credentials will be sent to the recovery email. The member must set a new password on first login. <strong>Invites expire after 7 days</strong> — use &ldquo;Resend invite&rdquo; to generate a fresh one if needed.
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
