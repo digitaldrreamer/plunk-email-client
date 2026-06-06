@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import { db } from "./db";
 import { tags } from "./db/schema";
 import emailsRouter from "./routes/emails";
@@ -14,7 +15,11 @@ import contactsRouter from "./routes/contacts";
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-app.use(cors({ origin: process.env.FRONTEND_URL ?? "http://localhost:3000" }));
+app.use(cors({
+  origin: process.env.FRONTEND_URL ?? "http://localhost:3000",
+  credentials: true,
+}));
+app.use(cookieParser());
 app.use(express.json({ limit: "512kb" }));
 app.use(express.urlencoded({ extended: true }));
 

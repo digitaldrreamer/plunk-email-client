@@ -406,7 +406,7 @@ export function EmailDetail() {
       form.append("body", html || plain);
       if (override) form.append("override", "true");
 
-      const res = await fetch(`${BACKEND}/api/emails/send`, { method: "POST", body: form });
+      const res = await fetch(`${BACKEND}/api/emails/send`, { method: "POST", credentials: "include", body: form });
       const json = await res.json();
 
       if (!json.success && json.threatBlocked) {

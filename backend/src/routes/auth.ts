@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, Response } from "express";
 import crypto from "crypto";
 import { eq } from "drizzle-orm";
 import { db } from "../db";
@@ -11,6 +11,27 @@ import {
   signTwoFactorTemp,
   verifyTwoFactorTemp,
 } from "../lib/auth";
+import { requireAuth } from "../middleware/auth";
+import { generateTotpSecret, totpQrCodeUrl, verifyTotp } from "../lib/totp";
+
+const router = Router();
+
+const COOKIE_NAME = "token";
+const COOKIE_MAX_AGE = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+function setAuthCookie(res: Response, token: string) {
+  res.cookie(COOKIE_NAME, token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "strict",
+    maxAge: COOKIE_MAX_AGE,
+    path: "/",
+  });
+}
+
+function clearAuthCookie(res: Response) {
+  res.clearCookie(COOKIE_NAME, { path: "/" });
+}
 
 function generateBackupCodes(): { plain: string[]; hashed: string[] } {
   const chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -22,10 +43,6 @@ function generateBackupCodes(): { plain: string[]; hashed: string[] } {
   const hashed = plain.map((c) => crypto.createHash("sha256").update(c).digest("hex"));
   return { plain, hashed };
 }
-import { requireAuth } from "../middleware/auth";
-import { generateTotpSecret, totpQrCodeUrl, verifyTotp } from "../lib/totp";
-
-const router = Router();
 
 // ── Login ─────────────────────────────────────────────────────────────────────
 
@@ -47,7 +64,7 @@ router.post("/login", async (req, res) => {
 
   await db.update(users).set({ lastLoginAt: new Date().toISOString() }).where(eq(users.id, user.id));
 
-  // 2FA required — return a limited temp token; client must complete 2FA
+  // 2FA required — return a short-lived temp token (not the session cookie yet)
   if (user.twoFactorEnabled && user.twoFactorSecret) {
     const tempToken = signTwoFactorTemp(user.id);
     return res.json({ success: true, requiresTwoFactor: true, tempToken });
@@ -60,11 +77,12 @@ router.post("/login", async (req, res) => {
     ...(user.mustChangePassword && { mustChangePassword: true }),
   });
 
+  setAuthCookie(res, token);
+
   res.json({
     success: true,
     mustChangePassword: user.mustChangePassword,
     data: {
-      token,
       user: {
         id: user.id, name: user.name, email: user.email,
         role: user.role, recoveryEmail: user.recoveryEmail,
@@ -93,7 +111,6 @@ router.post("/2fa/verify", async (req, res) => {
     return res.status(401).json({ success: false, error: "2FA not configured" });
   }
 
-  // Try TOTP first, then backup codes
   const totpOk = verifyTotp(code, user.twoFactorSecret);
   if (!totpOk) {
     const storedHashes: string[] = JSON.parse(user.twoFactorBackupCodes ?? "[]");
@@ -102,7 +119,6 @@ router.post("/2fa/verify", async (req, res) => {
     if (idx === -1) {
       return res.status(401).json({ success: false, error: "Incorrect code. Try again." });
     }
-    // Consume the backup code (one-time use)
     storedHashes.splice(idx, 1);
     await db.update(users).set({ twoFactorBackupCodes: JSON.stringify(storedHashes) }).where(eq(users.id, userId));
   }
@@ -112,14 +128,22 @@ router.post("/2fa/verify", async (req, res) => {
     ...(user.mustChangePassword && { mustChangePassword: true }),
   });
 
+  setAuthCookie(res, token);
+
   res.json({
     success: true,
     mustChangePassword: user.mustChangePassword,
     data: {
-      token,
       user: { id: user.id, name: user.name, email: user.email, role: user.role, recoveryEmail: user.recoveryEmail },
     },
   });
+});
+
+// ── Logout ────────────────────────────────────────────────────────────────────
+
+router.post("/logout", (_req, res) => {
+  clearAuthCookie(res);
+  res.json({ success: true });
 });
 
 // ── Force change password (first login) ──────────────────────────────────────
@@ -143,14 +167,14 @@ router.post("/force-change-password", requireAuth, async (req, res) => {
     updatedAt: new Date().toISOString(),
   }).where(eq(users.id, req.user!.sub));
 
-  // Issue a fresh token without the mustChangePassword flag
   const [fresh] = await db.select().from(users).where(eq(users.id, req.user!.sub)).limit(1);
   const token = signToken({ sub: fresh.id, email: fresh.email, role: fresh.role as "admin" | "user" });
+
+  setAuthCookie(res, token);
 
   res.json({
     success: true,
     data: {
-      token,
       user: { id: fresh.id, name: fresh.name, email: fresh.email, role: fresh.role, recoveryEmail: fresh.recoveryEmail },
     },
   });
@@ -248,7 +272,6 @@ router.post("/2fa/setup", requireAuth, async (req, res) => {
   const secret = generateTotpSecret();
   const qrCode = await totpQrCodeUrl(user.email, secret);
 
-  // Store secret temporarily (not yet enabled — enable happens on verify)
   await db.update(users).set({ twoFactorSecret: secret }).where(eq(users.id, req.user!.sub));
 
   res.json({ success: true, data: { secret, qrCode } });

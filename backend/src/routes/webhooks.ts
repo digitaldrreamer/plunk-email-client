@@ -3,7 +3,8 @@ import crypto from "crypto";
 import { eq } from "drizzle-orm";
 import { db } from "../db";
 import { tags } from "../db/schema";
-import { addEmail, updateEmailByPlunkId, type StoredEmail } from "../lib/store";
+import { addEmail, updateEmailByPlunkId, getEmailByPlunkId, type StoredEmail } from "../lib/store";
+import { sseEmit } from "../lib/sse";
 import { isHardFail, postmarkSpamScore, isSpam, type Verdict } from "../lib/spam";
 import { categorizeEmail } from "../lib/mistral";
 import { checkUrlSafety } from "../lib/safe-browsing";
@@ -111,6 +112,7 @@ router.post("/inbound", async (req, res) => {
     };
 
     await addEmail(email);
+    sseEmit("new-email", email);
     console.log(`[inbound] stored ${emailId} from ${event.from} (${category})`);
 
     // Ack immediately — heavy work runs after
@@ -118,17 +120,16 @@ router.post("/inbound", async (req, res) => {
 
     setImmediate(async () => {
       try {
-        // Upsert sender as contact
         await upsertContact(event.from.toLowerCase(), senderName);
       } catch (err) {
         console.warn("[inbound] contact upsert failed:", (err as Error).message);
       }
       try {
-        // URL safety check
         const threats = await checkUrlSafety(email.body);
         if (threats.length > 0) {
           const threatUrlList = threats.map((t) => t.url);
           await updateEmailByPlunkId(emailId, { category: "dangerous", threatUrls: threatUrlList });
+          sseEmit("email-updated", { id: emailId, category: "dangerous", threatUrls: threatUrlList });
           console.log(`[inbound] dangerous URLs in ${emailId}: ${threatUrlList.join(", ")}`);
         }
       } catch (err) {

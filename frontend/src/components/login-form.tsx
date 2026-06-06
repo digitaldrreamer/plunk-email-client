@@ -12,24 +12,21 @@ import { apiUrl } from "@/lib/api";
 type Step = "credentials" | "two-factor" | "force-change";
 
 export function LoginForm() {
-  const setAuth = useAuthStore((s) => s.setAuth);
+  const setUser = useAuthStore((s) => s.setUser);
+  const markChecked = useAuthStore((s) => s._markSessionChecked);
 
-  // Credentials step
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
 
-  // 2FA step
   const [tempToken, setTempToken] = useState("");
   const [otpCode, setOtpCode] = useState("");
   const [useBackup, setUseBackup] = useState(false);
   const [backupCode, setBackupCode] = useState("");
 
-  // Force-change step
+  const [forceUser, setForceUser] = useState<AuthUser | null>(null);
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [forceToken, setForceToken] = useState<string | null>(null);
-  const [forceUser, setForceUser] = useState<AuthUser | null>(null);
 
   const [step, setStep] = useState<Step>("credentials");
   const [loading, setLoading] = useState(false);
@@ -42,6 +39,7 @@ export function LoginForm() {
     try {
       const res = await fetch(apiUrl("/api/auth/login"), {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
@@ -57,7 +55,6 @@ export function LoginForm() {
       }
 
       if (json.mustChangePassword) {
-        setForceToken(json.data.token);
         setForceUser(json.data.user as AuthUser);
         setNewPassword("");
         setConfirmPassword("");
@@ -65,7 +62,8 @@ export function LoginForm() {
         return;
       }
 
-      setAuth(json.data.token, json.data.user as AuthUser);
+      setUser(json.data.user as AuthUser);
+      markChecked();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
@@ -81,6 +79,7 @@ export function LoginForm() {
     try {
       const res = await fetch(apiUrl("/api/auth/2fa/verify"), {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tempToken, code }),
       });
@@ -88,7 +87,6 @@ export function LoginForm() {
       if (!json.success) throw new Error(json.error ?? "Failed");
 
       if (json.mustChangePassword) {
-        setForceToken(json.data.token);
         setForceUser(json.data.user as AuthUser);
         setNewPassword("");
         setConfirmPassword("");
@@ -96,7 +94,8 @@ export function LoginForm() {
         return;
       }
 
-      setAuth(json.data.token, json.data.user as AuthUser);
+      setUser(json.data.user as AuthUser);
+      markChecked();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
@@ -117,17 +116,17 @@ export function LoginForm() {
     setError("");
     setLoading(true);
     try {
+      // Cookie from login is sent automatically via credentials: "include"
       const res = await fetch(apiUrl("/api/auth/force-change-password"), {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${forceToken}`,
-        },
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ newPassword }),
       });
       const json = await res.json();
       if (!json.success) throw new Error(json.error ?? "Failed");
-      setAuth(json.data.token, json.data.user as AuthUser);
+      setUser(json.data.user as AuthUser);
+      markChecked();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
@@ -138,7 +137,6 @@ export function LoginForm() {
   return (
     <div className="min-h-[100dvh] flex items-center justify-center bg-background px-4">
       <div className="w-full max-w-sm space-y-6">
-        {/* Logo */}
         <div className="flex flex-col items-center gap-3 text-center">
           <Image src="/logo_transparent.png" alt="reclear" width={120} height={40} className="h-10 w-auto" />
           <div>
@@ -150,10 +148,8 @@ export function LoginForm() {
           </div>
         </div>
 
-        {/* Card */}
         <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
 
-          {/* ── Credentials ── */}
           {step === "credentials" && (
             <form onSubmit={handleCredentials} className="space-y-3">
               <div className="space-y-1.5">
@@ -198,7 +194,6 @@ export function LoginForm() {
             </form>
           )}
 
-          {/* ── Two-factor ── */}
           {step === "two-factor" && (
             <form onSubmit={handleTwoFactor} className="space-y-4">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -252,7 +247,6 @@ export function LoginForm() {
             </form>
           )}
 
-          {/* ── Force change password ── */}
           {step === "force-change" && (
             <form onSubmit={handleForceChange} className="space-y-3">
               <p className="text-xs text-muted-foreground">

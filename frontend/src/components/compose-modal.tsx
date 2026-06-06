@@ -6,7 +6,6 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useEmailStore } from "@/store/email-store";
-import { useAuthStore } from "@/store/auth-store";
 import { toast } from "sonner";
 import { EmailEditor, type EmailEditorRef } from "@/components/email-editor";
 import {
@@ -37,16 +36,13 @@ function RecipientInput({
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [activeSuggestion, setActiveSuggestion] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
-  const token = useAuthStore((s) => s.token);
-
   // Debounced contact search
   useEffect(() => {
     if (input.length < 2) { setSuggestions([]); setShowSuggestions(false); return; }
     const timer = setTimeout(async () => {
-      if (!token) return;
       try {
         const res = await fetch(`${BACKEND}/api/contacts?q=${encodeURIComponent(input)}`, {
-          headers: { Authorization: `Bearer ${token}` },
+          credentials: "include",
         });
         if (!res.ok) return;
         const json = await res.json() as { success: boolean; data: ContactSuggestion[] };
@@ -57,7 +53,7 @@ function RecipientInput({
       } catch { /* ignore */ }
     }, 300);
     return () => clearTimeout(timer);
-  }, [input, token, recipients]);
+  }, [input, recipients]);
 
   const add = useCallback(
     (raw: string) => {
@@ -281,6 +277,7 @@ export function ComposeModal() {
 
       const res = await fetch(`${BACKEND}/api/emails/send`, {
         method: "POST",
+        credentials: "include",
         body: form,
       });
       const json = await res.json();

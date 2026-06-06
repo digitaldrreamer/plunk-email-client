@@ -33,7 +33,7 @@ export function SettingsModal({
   defaultTab?: string;
 }) {
   const { signature, setSignature } = useEmailStore();
-  const { token, user, updateUser } = useAuthStore();
+  const { user, updateUser } = useAuthStore();
   const editorRef = useRef<EmailEditorRef>(null);
 
   // Signature
@@ -55,7 +55,6 @@ export function SettingsModal({
     try {
       await apiFetch("/api/auth/me", {
         method: "PATCH",
-        token,
         body: JSON.stringify({ name: pName, recoveryEmail: pRecovery }),
       });
       updateUser({ name: pName, recoveryEmail: pRecovery || null });
@@ -83,7 +82,6 @@ export function SettingsModal({
     try {
       await apiFetch("/api/auth/me/password", {
         method: "PATCH",
-        token,
         body: JSON.stringify({ currentPassword: currentPw, newPassword: newPw }),
       });
       setCurrentPw(""); setNewPw(""); setConfirmPw("");
@@ -113,7 +111,7 @@ export function SettingsModal({
   const initTfa = async () => {
     if (tfaInitialized) return;
     try {
-      const me = await apiFetch<{ twoFactorEnabled: boolean }>("/api/auth/me", { token });
+      const me = await apiFetch<{ twoFactorEnabled: boolean }>("/api/auth/me");
       setTfaEnabled(!!me.twoFactorEnabled);
     } catch { /* ignore */ }
     setTfaInitialized(true);
@@ -124,7 +122,6 @@ export function SettingsModal({
     try {
       const data = await apiFetch<{ secret: string; qrCode: string }>("/api/auth/2fa/setup", {
         method: "POST",
-        token,
       });
       setTfaSecret(data.secret);
       setTfaQrCode(data.qrCode);
@@ -142,7 +139,6 @@ export function SettingsModal({
     try {
       const data = await apiFetch<{ backupCodes: string[] }>("/api/auth/2fa/enable", {
         method: "POST",
-        token,
         body: JSON.stringify({ code: tfaOtp }),
       });
       setTfaBackupCodes(data.backupCodes);
@@ -160,7 +156,6 @@ export function SettingsModal({
     try {
       await apiFetch("/api/auth/2fa/disable", {
         method: "POST",
-        token,
         body: JSON.stringify({ password: tfaDisablePw }),
       });
       setTfaEnabled(false);

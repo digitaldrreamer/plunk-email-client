@@ -20,6 +20,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useEmailStore } from "@/store/email-store";
 import { useAuthStore } from "@/store/auth-store";
+import { apiUrl } from "@/lib/api";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -71,6 +72,12 @@ export function MobileBottomNav() {
   } = useEmailStore();
 
   const { user, clearAuth } = useAuthStore();
+
+  const handleLogout = async () => {
+    await fetch(apiUrl("/api/auth/logout"), { method: "POST", credentials: "include" }).catch(() => {});
+    clearAuth();
+  };
+
   const [moreOpen, setMoreOpen] = useState(false);
   const [addTagOpen, setAddTagOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -317,7 +324,7 @@ export function MobileBottomNav() {
                     variant="ghost"
                     size="icon-xs"
                     className="text-muted-foreground"
-                    onClick={clearAuth}
+                    onClick={handleLogout}
                   >
                     <LogOutIcon className="size-4" />
                   </Button>

@@ -36,6 +36,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { useEmailStore } from "@/store/email-store";
 import { useAuthStore } from "@/store/auth-store";
+import { apiUrl } from "@/lib/api";
 import type { Folder } from "@/data/emails";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { InstallButton } from "@/components/install-button";
@@ -65,6 +66,11 @@ export function Sidebar({ onOpenSettings, onOpenContacts }: { onOpenSettings?: (
   } = useEmailStore();
 
   const { user, clearAuth } = useAuthStore();
+
+  const handleLogout = async () => {
+    await fetch(apiUrl("/api/auth/logout"), { method: "POST", credentials: "include" }).catch(() => {});
+    clearAuth();
+  };
   const [addTagOpen, setAddTagOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
   const [newTagName, setNewTagName] = useState("");
@@ -241,7 +247,7 @@ export function Sidebar({ onOpenSettings, onOpenContacts }: { onOpenSettings?: (
               </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon-xs" className="text-muted-foreground hover:text-foreground" onClick={clearAuth}>
+                  <Button variant="ghost" size="icon-xs" className="text-muted-foreground hover:text-foreground" onClick={handleLogout}>
                     <LogOutIcon className="size-3.5" />
                   </Button>
                 </TooltipTrigger>

@@ -12,9 +12,32 @@ import {
   addEmail,
   type StoredEmail,
 } from "../lib/store";
-
+import { requireAuth } from "../middleware/auth";
+import { addSseClient, removeSseClient } from "../lib/sse";
 
 const router = Router();
+
+// ── SSE stream ────────────────────────────────────────────────────────────────
+
+router.get("/stream", requireAuth, (req, res) => {
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no"); // disable nginx buffering
+  res.flushHeaders();
+
+  addSseClient(res);
+
+  // Heartbeat every 25 s to prevent proxy/load-balancer timeouts
+  const heartbeat = setInterval(() => {
+    try { res.write(":\n\n"); } catch { clearInterval(heartbeat); }
+  }, 25_000);
+
+  req.on("close", () => {
+    clearInterval(heartbeat);
+    removeSseClient(res);
+  });
+});
 
 // Multer: accept up to 10 files, 10 MB total (mirrors Plunk limits)
 const upload = multer({

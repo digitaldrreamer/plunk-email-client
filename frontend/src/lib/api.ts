@@ -1,26 +1,19 @@
-// Thin wrapper so all API calls include the auth token and base URL.
-
 const BACKEND = process.env.NEXT_PUBLIC_API_URL || "https://api.mail.reclear.io";
 
 export function apiUrl(path: string): string {
   return `${BACKEND}${path}`;
 }
 
-export function authHeaders(token: string | null): HeadersInit {
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
-
 export async function apiFetch<T = unknown>(
   path: string,
-  options: RequestInit & { token?: string | null } = {}
+  options: RequestInit = {}
 ): Promise<T> {
-  const { token, ...rest } = options;
   const res = await fetch(apiUrl(path), {
-    ...rest,
+    ...options,
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
-      ...authHeaders(token ?? null),
-      ...rest.headers,
+      ...options.headers,
     },
   });
   const json = await res.json();

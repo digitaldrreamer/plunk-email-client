@@ -10,12 +10,14 @@ declare global {
 }
 
 export function requireAuth(req: Request, res: Response, next: NextFunction) {
+  // Prefer HttpOnly cookie; fall back to Bearer header (used for temp tokens in force-change flow)
+  const cookieToken = req.cookies?.token as string | undefined;
   const header = req.headers.authorization;
-  if (!header?.startsWith("Bearer ")) {
-    return res.status(401).json({ success: false, error: "Unauthorized" });
-  }
+  const raw = cookieToken ?? (header?.startsWith("Bearer ") ? header.slice(7) : undefined);
+
+  if (!raw) return res.status(401).json({ success: false, error: "Unauthorized" });
   try {
-    req.user = verifyToken(header.slice(7));
+    req.user = verifyToken(raw);
     next();
   } catch {
     return res.status(401).json({ success: false, error: "Invalid or expired token" });

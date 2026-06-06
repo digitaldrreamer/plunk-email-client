@@ -34,7 +34,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useAuthStore } from "@/store/auth-store";
-import { apiFetch, apiUrl, authHeaders } from "@/lib/api";
+import { apiFetch, apiUrl } from "@/lib/api";
 
 interface UserRecord {
   id: string;
@@ -58,7 +58,7 @@ function getInitials(name: string) {
 }
 
 export function AdminUsersModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { token, user: me } = useAuthStore();
+  const { user: me } = useAuthStore();
   const [users, setUsers] = useState<UserRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -90,14 +90,14 @@ export function AdminUsersModal({ open, onClose }: { open: boolean; onClose: () 
     setLoading(true);
     setError("");
     try {
-      const data = await apiFetch<UserRecord[]>("/api/users", { token });
+      const data = await apiFetch<UserRecord[]>("/api/users");
       setUsers(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load users");
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, []);
 
   useEffect(() => {
     if (open) { loadUsers(); setView("list"); }
@@ -129,7 +129,6 @@ export function AdminUsersModal({ open, onClose }: { open: boolean; onClose: () 
     try {
       await apiFetch("/api/users", {
         method: "POST",
-        token,
         body: JSON.stringify({ name: cName, email: cEmail, recoveryEmail: cRecovery, role: cRole }),
       });
       setCName(""); setCEmail(""); setCRecovery(""); setCRole("user");
@@ -150,7 +149,6 @@ export function AdminUsersModal({ open, onClose }: { open: boolean; onClose: () 
     try {
       await apiFetch(`/api/users/${selected.id}`, {
         method: "PATCH",
-        token,
         body: JSON.stringify({ name: eName, recoveryEmail: eRecovery, role: eRole, disabled: eDisabled }),
       });
       await loadUsers();
@@ -169,7 +167,6 @@ export function AdminUsersModal({ open, onClose }: { open: boolean; onClose: () 
     try {
       await apiFetch(`/api/users/${selected.id}/send-reset`, {
         method: "POST",
-        token,
       });
       setRpSent(true);
     } catch (err) {
@@ -184,7 +181,7 @@ export function AdminUsersModal({ open, onClose }: { open: boolean; onClose: () 
     try {
       const res = await fetch(apiUrl(`/api/users/${u.id}`), {
         method: "DELETE",
-        headers: authHeaders(token),
+        credentials: "include",
       });
       if (!res.ok && res.status !== 204) {
         const j = await res.json();
@@ -201,7 +198,6 @@ export function AdminUsersModal({ open, onClose }: { open: boolean; onClose: () 
     try {
       await apiFetch(`/api/users/${u.id}`, {
         method: "PATCH",
-        token,
         body: JSON.stringify({ disabled: !u.disabled }),
       });
       await loadUsers();

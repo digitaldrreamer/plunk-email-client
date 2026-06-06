@@ -18,10 +18,6 @@ export interface Tag {
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-function getToken() {
-  return useAuthStore.getState().token;
-}
-
 function getMe(): Contact {
   const user = useAuthStore.getState().user;
   return { name: user?.name ?? "Me", email: user?.email ?? "" };
@@ -43,12 +39,11 @@ function colorToClasses(color: string) {
 }
 
 async function apiReq(path: string, opts: RequestInit = {}) {
-  const token = getToken();
   return fetch(apiUrl(path), {
     ...opts,
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...((opts.headers as Record<string, string>) ?? {}),
     },
   });
@@ -161,6 +156,10 @@ interface EmailStore {
   setComposing: (v: boolean) => void;
   addUserTag: (name: string, color: string) => Promise<void>;
   setSignature: (sig: string) => void;
+
+  // Real-time
+  addEmail: (email: Email) => void;
+  patchEmail: (id: string, patch: Partial<Email>) => void;
 }
 
 export const useEmailStore = create<EmailStore>((set, get) => ({
@@ -396,6 +395,19 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
 
   setComposing: (v) => set({ composing: v }),
   setSignature: (sig) => set({ signature: sig }),
+
+  addEmail: (email) => {
+    set((state) => {
+      if (state.emails.find((e) => e.id === email.id)) return {};
+      return { emails: [...state.emails, email] };
+    });
+  },
+
+  patchEmail: (id, patch) => {
+    set((state) => ({
+      emails: state.emails.map((e) => e.id === id ? { ...e, ...patch } : e),
+    }));
+  },
 
   addUserTag: async (name, color) => {
     const id = name.toLowerCase().replace(/\s+/g, "-");

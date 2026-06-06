@@ -17,12 +17,14 @@ import { ContactsPanel } from "@/components/contacts-panel";
 import { Button } from "@/components/ui/button";
 import { useEmailStore } from "@/store/email-store";
 import { useDocumentTitle } from "@/hooks/use-document-title";
+import { useEmailStream } from "@/hooks/use-email-stream";
 
 type AppView = "email" | "contacts";
 
 export function EmailClient() {
   const { selectedThreadId, selectThread, loadEmails, loadTags } = useEmailStore();
   useDocumentTitle();
+  useEmailStream();
 
   useEffect(() => {
     loadTags();

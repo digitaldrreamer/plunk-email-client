@@ -14,19 +14,19 @@ interface Props {
 }
 
 export function RecoveryEmailNudge({ onSetupNow }: Props) {
-  const { token } = useAuthStore();
+  const user = useAuthStore((s) => s.user);
   const [show, setShow] = useState(false);
 
   useEffect(() => {
-    if (!token) return;
+    if (!user) return;
 
     const skipUntil = localStorage.getItem(STORAGE_KEY);
     if (skipUntil && Date.now() < Number(skipUntil)) return;
 
-    apiFetch<{ recoveryEmail?: string | null }>("/api/auth/me", { token })
+    apiFetch<{ recoveryEmail?: string | null }>("/api/auth/me")
       .then((me) => { if (!me.recoveryEmail) setShow(true); })
       .catch(() => {});
-  }, [token]);
+  }, [user]);
 
   const dismiss = () => {
     localStorage.setItem(STORAGE_KEY, String(Date.now() + SEVEN_DAYS_MS));

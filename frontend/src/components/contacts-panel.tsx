@@ -6,7 +6,6 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { useAuthStore } from "@/store/auth-store";
 import { apiFetch } from "@/lib/api";
 import { toast } from "sonner";
 
@@ -47,7 +46,6 @@ function relativeTime(iso?: string) {
 }
 
 export function ContactsPanel({ onBack }: { onBack?: () => void }) {
-  const { token } = useAuthStore();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -61,7 +59,7 @@ export function ContactsPanel({ onBack }: { onBack?: () => void }) {
       const params = new URLSearchParams();
       if (query) params.set("q", query);
       else params.set("page", String(pg));
-      const res = await apiFetch<{ data: Contact[]; total: number }>(`/api/contacts?${params}`, { token });
+      const res = await apiFetch<{ data: Contact[]; total: number }>(`/api/contacts?${params}`);
       setContacts(pg === 1 || query ? res.data : (prev) => [...prev, ...res.data]);
       setTotal(res.total);
     } catch {
@@ -69,7 +67,7 @@ export function ContactsPanel({ onBack }: { onBack?: () => void }) {
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, []);
 
   // Debounced search
   useEffect(() => {
@@ -82,7 +80,6 @@ export function ContactsPanel({ onBack }: { onBack?: () => void }) {
     try {
       await apiFetch(`/api/contacts/${encodeURIComponent(contact.email)}/subscribe`, {
         method: "PATCH",
-        token,
         body: JSON.stringify({ subscribed: !contact.subscribed }),
       });
       setContacts((cs) =>

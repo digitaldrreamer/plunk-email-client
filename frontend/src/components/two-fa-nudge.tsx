@@ -14,21 +14,19 @@ interface Props {
 }
 
 export function TwoFANudge({ onSetupNow }: Props) {
-  const { token } = useAuthStore();
+  const user = useAuthStore((s) => s.user);
   const [show, setShow] = useState(false);
 
   useEffect(() => {
-    if (!token) return;
+    if (!user) return;
 
-    // Check if dismissed within the last 7 days
     const skipUntil = localStorage.getItem(STORAGE_KEY);
     if (skipUntil && Date.now() < Number(skipUntil)) return;
 
-    // Fetch 2FA status
-    apiFetch<{ twoFactorEnabled: boolean }>("/api/auth/me", { token })
+    apiFetch<{ twoFactorEnabled: boolean }>("/api/auth/me")
       .then((me) => { if (!me.twoFactorEnabled) setShow(true); })
       .catch(() => {});
-  }, [token]);
+  }, [user]);
 
   const dismiss = () => {
     localStorage.setItem(STORAGE_KEY, String(Date.now() + SEVEN_DAYS_MS));

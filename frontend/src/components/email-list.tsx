@@ -545,7 +545,7 @@ export function EmailList() {
 
                   {/* Hover actions + star */}
                   <div className="flex items-center gap-0.5 shrink-0 self-start mt-0.5">
-                    <div className="flex items-center gap-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex items-center gap-0 max-w-0 overflow-hidden opacity-0 group-hover:max-w-[60px] group-hover:opacity-100 transition-all duration-150">
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <button

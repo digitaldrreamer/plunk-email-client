@@ -1,35 +1,34 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ImageIcon, ImageOffIcon } from "lucide-react";
+import { ImageIcon, ImageOffIcon, SunIcon, MoonIcon, MonitorIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useTheme } from "next-themes";
 
-// ── Baseline CSS injected into every email ────────────────────────────────────
-// Normalises fonts, resets margins, constrains images and tables.
-// The dark-mode block inverts backgrounds that are pure white / near-black
-// so bright emails don't blind the user in dark mode.
-const BASE_CSS = `
-<style>
+type EmailTheme = "auto" | "light" | "dark";
+
+// Build scoped CSS for the iframe body based on resolved dark/light
+function buildBaseCss(isDark: boolean): string {
+  const themeVars = isDark
+    ? `html,body{background:#0a0a0a;color:#e5e7eb}a{color:#60a5fa}blockquote{border-color:#374151;color:#9ca3af}pre,code{background:#1f2937;color:#e5e7eb}`
+    : `html,body{background:#ffffff;color:#111827}a{color:#2563eb}blockquote{border-color:#d1d5db;color:#6b7280}pre,code{background:#f3f4f6;color:#111827}`;
+
+  return `<style>
 *{box-sizing:border-box;-webkit-text-size-adjust:100%}
 html,body{margin:0;padding:0;word-break:break-word;overflow-wrap:break-word}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:14px;line-height:1.6;color:#111827;padding:0 2px 8px}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:14px;line-height:1.6;padding:0 2px 8px}
 img{max-width:100%!important;height:auto!important;display:inline-block}
-a{color:#2563eb;word-break:break-all}
+a{word-break:break-all}
 table{border-collapse:collapse;max-width:100%!important}
 td,th{vertical-align:top}
 p{margin:0 0 0.75em}
-blockquote{border-left:3px solid #d1d5db;padding-left:12px;color:#6b7280;margin:8px 0}
-pre,code{font-family:ui-monospace,monospace;font-size:13px;background:#f3f4f6;border-radius:3px;padding:1px 4px}
+blockquote{border-left:3px solid;padding-left:12px;margin:8px 0}
+pre,code{font-family:ui-monospace,monospace;font-size:13px;border-radius:3px;padding:1px 4px}
 pre{padding:10px;overflow-x:auto}
-@media(prefers-color-scheme:dark){
-  html,body{background:#0a0a0a;color:#e5e7eb}
-  a{color:#60a5fa}
-  blockquote{border-color:#374151;color:#9ca3af}
-  pre,code{background:#1f2937}
-}
+${themeVars}
 </style>`;
+}
 
-// ── Dangerous-email link processing ──────────────────────────────────────────
 function applyDangerousOverlay(html: string, threatUrls: string[]): string {
   const threatSet = new Set(threatUrls);
   return html.replace(/<a(\s[^>]*)>([\s\S]*?)<\/a>/gi, (_, attrs, content) => {
@@ -43,9 +42,6 @@ function applyDangerousOverlay(html: string, threatUrls: string[]): string {
   });
 }
 
-// ── Remote image handling ─────────────────────────────────────────────────────
-// Replaces remote src with a transparent placeholder and stores the real URL
-// in data-src so we can restore them when the user clicks "Load images".
 const BLANK_IMG = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
 
 function stripRemoteImages(html: string): string {
@@ -62,27 +58,22 @@ function restoreRemoteImages(html: string): string {
   );
 }
 
-// ── Full-document builder ─────────────────────────────────────────────────────
-// Mirrors Tranche's buildDoc: if the email is already a full HTML document,
-// inject our CSS into its <head> rather than wrapping it again (which would
-// produce malformed HTML with duplicate body/html tags).
-function buildDoc(rawHtml: string, showImages: boolean): string {
+function buildDoc(rawHtml: string, showImages: boolean, isDark: boolean): string {
   const html = showImages ? restoreRemoteImages(rawHtml) : stripRemoteImages(rawHtml);
+  const baseCss = buildBaseCss(isDark);
   const t   = html.trim();
   const low = t.toLowerCase();
 
   if (low.startsWith("<!doctype") || low.startsWith("<html")) {
     const headClose = low.indexOf("</head>");
-    if (headClose !== -1) return t.slice(0, headClose) + BASE_CSS + t.slice(headClose);
+    if (headClose !== -1) return t.slice(0, headClose) + baseCss + t.slice(headClose);
     const bodyOpen  = low.indexOf("<body");
-    if (bodyOpen  !== -1) return t.slice(0, bodyOpen) + `<head>${BASE_CSS}</head>` + t.slice(bodyOpen);
+    if (bodyOpen  !== -1) return t.slice(0, bodyOpen) + `<head>${baseCss}</head>` + t.slice(bodyOpen);
     return t;
   }
 
-  return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">${BASE_CSS}</head><body>${html}</body></html>`;
+  return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">${baseCss}</head><body>${html}</body></html>`;
 }
-
-// ── Component ─────────────────────────────────────────────────────────────────
 
 interface Props {
   html: string;
@@ -90,22 +81,27 @@ interface Props {
   threatUrls?: string[];
 }
 
+const THEME_CYCLE: EmailTheme[] = ["auto", "light", "dark"];
+
 export function EmailBodyFrame({ html, isDangerous = false, threatUrls = [] }: Props) {
   const iframeRef  = useRef<HTMLIFrameElement>(null);
   const [height, setHeight]         = useState(160);
   const [loaded, setLoaded]         = useState(false);
   const [showImages, setShowImages] = useState(false);
+  const [emailTheme, setEmailTheme] = useState<EmailTheme>("auto");
 
-  // Process dangerous emails first (replaces links with spans)
+  const { resolvedTheme } = useTheme();
+  const appIsDark = resolvedTheme === "dark";
+  const isDark = emailTheme === "dark" || (emailTheme === "auto" && appIsDark);
+
   const processedHtml = isDangerous ? applyDangerousOverlay(html, threatUrls) : html;
+  const srcdoc = buildDoc(processedHtml, showImages, isDark);
 
-  const srcdoc = buildDoc(processedHtml, showImages);
-
-  // Reset on new email
   useEffect(() => {
     setHeight(160);
     setLoaded(false);
     setShowImages(false);
+    setEmailTheme("auto");
   }, [html]);
 
   const onLoad = useCallback(() => {
@@ -116,21 +112,33 @@ export function EmailBodyFrame({ html, isDangerous = false, threatUrls = [] }: P
     setLoaded(true);
   }, []);
 
-  // Check whether the email actually has remote images to show the toggle
   const hasRemoteImages = /src=(["'])https?:\/\/[^"']+\1/i.test(html);
+
+  const cycleTheme = () => {
+    setEmailTheme((t) => {
+      const idx = THEME_CYCLE.indexOf(t);
+      return THEME_CYCLE[(idx + 1) % THEME_CYCLE.length];
+    });
+  };
+
+  const themeIcon = emailTheme === "light"
+    ? <SunIcon className="size-3" />
+    : emailTheme === "dark"
+    ? <MoonIcon className="size-3" />
+    : <MonitorIcon className="size-3" />;
+
+  const themeLabel = emailTheme === "light" ? "Light" : emailTheme === "dark" ? "Dark" : "Auto";
 
   return (
     <div className="relative">
-      {/* Image privacy toggle */}
-      {hasRemoteImages && (
-        <div className="flex items-center justify-end mb-2">
+      <div className="flex items-center justify-end gap-1 mb-2">
+        {hasRemoteImages && (
           <Button
             variant="ghost"
             size="sm"
             className="h-6 gap-1.5 text-[11px] text-muted-foreground hover:text-foreground"
             onClick={() => {
               setShowImages((v) => !v);
-              // Re-trigger height measurement after images load
               setTimeout(() => {
                 const doc = iframeRef.current?.contentDocument;
                 if (!doc) return;
@@ -143,10 +151,19 @@ export function EmailBodyFrame({ html, isDangerous = false, threatUrls = [] }: P
               : <><ImageIcon    className="size-3" /> Load images</>
             }
           </Button>
-        </div>
-      )}
+        )}
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-6 gap-1.5 text-[11px] text-muted-foreground hover:text-foreground"
+          onClick={cycleTheme}
+          title={`Email theme: ${themeLabel} — click to cycle`}
+        >
+          {themeIcon}
+          {themeLabel}
+        </Button>
+      </div>
 
-      {/* Skeleton shown until iframe fires onload */}
       {!loaded && (
         <div className="absolute inset-0 z-10 animate-pulse space-y-3 pt-1 pointer-events-none">
           <div className="h-3 w-3/4 rounded bg-muted" />

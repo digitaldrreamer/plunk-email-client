@@ -12,22 +12,29 @@ export interface AuthUser {
 }
 
 interface AuthStore {
-  token: string | null;
   user: AuthUser | null;
-  setAuth: (token: string, user: AuthUser) => void;
+  // True once we've verified the session with the server (resets on every page load)
+  _sessionChecked: boolean;
+  setUser: (user: AuthUser | null) => void;
   updateUser: (patch: Partial<AuthUser>) => void;
   clearAuth: () => void;
+  _markSessionChecked: () => void;
 }
 
 export const useAuthStore = create<AuthStore>()(
   persist(
     (set) => ({
-      token: null,
       user: null,
-      setAuth: (token, user) => set({ token, user }),
+      _sessionChecked: false,
+      setUser: (user) => set({ user }),
       updateUser: (patch) => set((s) => ({ user: s.user ? { ...s.user, ...patch } : null })),
-      clearAuth: () => set({ token: null, user: null }),
+      clearAuth: () => set({ user: null }),
+      _markSessionChecked: () => set({ _sessionChecked: true }),
     }),
-    { name: "reclear-auth" }
+    {
+      name: "reclear-auth",
+      // Only persist the user object — no tokens, no session state
+      partialize: (s) => ({ user: s.user }),
+    }
   )
 );

@@ -1,0 +1,60 @@
+"use client";
+
+import { useEffect, useRef } from "react";
+import { toast } from "sonner";
+import { useEmailStore } from "@/store/email-store";
+import { useAuthStore } from "@/store/auth-store";
+import type { Email } from "@/data/emails";
+
+const BACKEND = process.env.NEXT_PUBLIC_API_URL || "https://api.mail.reclear.io";
+
+export function useEmailStream() {
+  const user = useAuthStore((s) => s.user);
+  const addEmail = useEmailStore((s) => s.addEmail);
+  const patchEmail = useEmailStore((s) => s.patchEmail);
+  const esRef = useRef<EventSource | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const connect = () => {
+      const es = new EventSource(`${BACKEND}/api/emails/stream`, { withCredentials: true });
+      esRef.current = es;
+
+      es.addEventListener("new-email", (e) => {
+        try {
+          const email = JSON.parse(e.data) as Email;
+          addEmail(email);
+          if (email.folder === "inbox") {
+            toast(`New email from ${email.from.name || email.from.email}`, {
+              description: email.subject,
+              duration: 5000,
+            });
+          }
+        } catch { /* ignore parse errors */ }
+      });
+
+      es.addEventListener("email-updated", (e) => {
+        try {
+          const patch = JSON.parse(e.data) as { id: string } & Partial<Email>;
+          patchEmail(patch.id, patch);
+        } catch { /* ignore */ }
+      });
+
+      es.onerror = () => {
+        es.close();
+        esRef.current = null;
+        // Auto-reconnect after 5 s — EventSource usually handles this itself,
+        // but we manually reconnect to ensure it works after longer gaps
+        setTimeout(connect, 5_000);
+      };
+    };
+
+    connect();
+
+    return () => {
+      esRef.current?.close();
+      esRef.current = null;
+    };
+  }, [user?.id]);
+}
