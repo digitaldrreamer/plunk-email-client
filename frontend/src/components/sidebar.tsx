@@ -37,7 +37,6 @@ import { useEmailStore } from "@/store/email-store";
 import { useAuthStore } from "@/store/auth-store";
 import type { Folder } from "@/data/emails";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { SettingsModal } from "@/components/settings-modal";
 import { InstallButton } from "@/components/install-button";
 import { AdminUsersModal } from "@/components/admin-users-modal";
 
@@ -52,7 +51,7 @@ const TAG_COLORS = [
   { value: "yellow", label: "Yellow", cls: "bg-yellow-500" },
 ];
 
-export function Sidebar() {
+export function Sidebar({ onOpenSettings }: { onOpenSettings?: (tab?: string) => void }) {
   const {
     currentFolder,
     setFolder,
@@ -66,7 +65,6 @@ export function Sidebar() {
 
   const { user, clearAuth } = useAuthStore();
   const [addTagOpen, setAddTagOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
   const [newTagName, setNewTagName] = useState("");
   const [newTagColor, setNewTagColor] = useState("blue");
@@ -226,7 +224,7 @@ export function Sidebar() {
               )}
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon-xs" className="text-muted-foreground hover:text-foreground" onClick={() => setSettingsOpen(true)}>
+                  <Button variant="ghost" size="icon-xs" className="text-muted-foreground hover:text-foreground" onClick={() => onOpenSettings?.()}>
                     <SettingsIcon className="size-3.5" />
                   </Button>
                 </TooltipTrigger>
@@ -245,7 +243,6 @@ export function Sidebar() {
         </div>
       </div>
 
-      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <AdminUsersModal open={adminOpen} onClose={() => setAdminOpen(false)} />
 
       {/* Add Tag Dialog */}

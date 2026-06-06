@@ -26,9 +26,11 @@ type TwoFAStep = "idle" | "setup" | "backup-codes" | "done" | "disable-confirm";
 export function SettingsModal({
   open,
   onClose,
+  defaultTab = "signature",
 }: {
   open: boolean;
   onClose: () => void;
+  defaultTab?: string;
 }) {
   const { signature, setSignature } = useEmailStore();
   const { token, user, updateUser } = useAuthStore();
@@ -211,7 +213,7 @@ export function SettingsModal({
           </DialogTitle>
         </DialogHeader>
 
-        <Tabs defaultValue="signature" className="pt-1">
+        <Tabs defaultValue={defaultTab} key={defaultTab} className="pt-1">
           <TabsList className="w-full">
             <TabsTrigger value="signature" className="flex-1">Signature</TabsTrigger>
             <TabsTrigger value="profile" className="flex-1">Profile</TabsTrigger>
