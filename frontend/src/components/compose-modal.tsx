@@ -17,7 +17,6 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 
-const BACKEND = process.env.NEXT_PUBLIC_API_URL || "https://api.mail.reclear.io";
 const DRAFT_KEY = "reclear-compose-draft";
 
 // ── Recipient chip input ──────────────────────────────────────────────────────
@@ -41,7 +40,7 @@ function RecipientInput({
     if (input.length < 2) { setSuggestions([]); setShowSuggestions(false); return; }
     const timer = setTimeout(async () => {
       try {
-        const res = await fetch(`${BACKEND}/api/contacts?q=${encodeURIComponent(input)}`, {
+        const res = await fetch(`/api/contacts?q=${encodeURIComponent(input)}`, {
           credentials: "include",
         });
         if (!res.ok) return;
@@ -269,7 +268,7 @@ export function ComposeModal() {
     setAiWorking("compose");
     setError("");
     try {
-      const res = await fetch(`${BACKEND}/api/ai/compose`, {
+      const res = await fetch("/api/ai/compose", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -297,7 +296,7 @@ export function ComposeModal() {
     setAiWorking("spell");
     setError("");
     try {
-      const res = await fetch(`${BACKEND}/api/ai/fix-spelling`, {
+      const res = await fetch("/api/ai/fix-spelling", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -329,7 +328,7 @@ export function ComposeModal() {
       attachments.forEach((f) => form.append("files", f));
       if (override) form.append("override", "true");
 
-      const res = await fetch(`${BACKEND}/api/emails/send`, {
+      const res = await fetch("/api/emails/send", {
         method: "POST",
         credentials: "include",
         body: form,
@@ -358,7 +357,7 @@ export function ComposeModal() {
     const body = editorRef.current?.getHtml() ?? bodyRef.current;
     saveDraft({ recipients, subject, body, savedAt: Date.now() });
     try {
-      await fetch(`${BACKEND}/api/emails/draft`, {
+      await fetch("/api/emails/draft", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },

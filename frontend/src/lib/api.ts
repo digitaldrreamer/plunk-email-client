@@ -1,14 +1,14 @@
-const BACKEND = process.env.NEXT_PUBLIC_API_URL || "https://api.mail.reclear.io";
-
+// All requests go to same origin — Next.js proxies /api/* to the backend.
+// This eliminates CORS entirely and ensures cookies work across all browsers.
 export function apiUrl(path: string): string {
-  return `${BACKEND}${path}`;
+  return path;
 }
 
 export async function apiFetch<T = unknown>(
   path: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const res = await fetch(apiUrl(path), {
+  const res = await fetch(path, {
     ...options,
     credentials: "include",
     headers: {

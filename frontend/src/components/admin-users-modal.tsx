@@ -342,7 +342,7 @@ export function AdminUsersModal({ open, onClose }: { open: boolean; onClose: () 
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-medium">Reclear email</label>
-                <Input type="email" value={cEmail} onChange={(e) => setCEmail(e.target.value)} placeholder="user@reclear.app" required />
+                <Input type="email" value={cEmail} onChange={(e) => setCEmail(e.target.value)} placeholder="user@team.reclear.io" required />
               </div>
             </div>
 

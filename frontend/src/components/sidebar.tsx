@@ -223,7 +223,7 @@ export function Sidebar({ onOpenSettings, onOpenContacts }: { onOpenSettings?: (
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-xs font-medium text-foreground truncate">{user?.name ?? "Me"}</p>
-              <p className="text-[11px] text-muted-foreground truncate">{user?.email ?? "me@reclear.io"}</p>
+              <p className="text-[11px] text-muted-foreground truncate">{user?.email ?? "me@team.reclear.io"}</p>
             </div>
             <div className="flex items-center gap-0.5 shrink-0">
               <InstallButton iconOnly />

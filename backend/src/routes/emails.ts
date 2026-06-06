@@ -205,7 +205,7 @@ router.post(
         id: emailId,
         messageId: emailId,
         threadId: `t-sent-${Date.now()}`,
-        from: { name: "Me", email: process.env.PLUNK_FROM_EMAIL ?? "me@reclear.io" },
+        from: { name: "Me", email: process.env.PLUNK_FROM_EMAIL ?? "me@team.reclear.io" },
         to: to.map((addr) => ({ name: addr, email: addr })),
         subject,
         body: htmlBody,

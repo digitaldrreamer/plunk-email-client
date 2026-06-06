@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import { addEmail } from "./store";
 
-const FROM_EMAIL = process.env.PLUNK_FROM_EMAIL ?? "notifications@teams.reclear.io";
+const FROM_EMAIL = process.env.PLUNK_FROM_EMAIL ?? "notifications@team.reclear.io";
 const FROM_NAME  = "Reclear";
 
 /**

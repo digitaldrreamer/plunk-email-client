@@ -15,11 +15,11 @@ router.get("/", async (req, res) => {
 
     if (q) {
       const results = await searchContacts(q);
-      return res.json({ success: true, data: results, total: results.length });
+      return res.json({ success: true, data: { items: results, total: results.length } });
     }
 
     const { items, total } = await listContacts(offset, limit);
-    res.json({ success: true, data: items, total, page, limit });
+    res.json({ success: true, data: { items, total } });
   } catch (err) {
     console.error("[contacts]", err);
     res.status(500).json({ success: false, error: "Internal server error" });

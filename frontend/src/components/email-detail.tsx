@@ -29,7 +29,6 @@ import {
   LinkIcon,
 } from "lucide-react";
 
-const BACKEND = process.env.NEXT_PUBLIC_API_URL || "https://api.mail.reclear.io";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -204,7 +203,7 @@ function EmailCard({
   isDangerous?: boolean;
   threatUrls?: string[];
 }) {
-  const isFromMe = email.from.email === "me@reclear.io";
+  const isFromMe = email.from.email === "me@team.reclear.io";
   const color = avatarColor(email.from.name);
   const initials = getInitials(email.from.name);
 
@@ -386,7 +385,7 @@ export function EmailDetail() {
     });
   };
 
-  const others = thread.participants.filter((p) => p.email !== "me@reclear.io");
+  const others = thread.participants.filter((p) => p.email !== "me@team.reclear.io");
   const replyTarget = others[0]?.name ?? "sender";
 
   const doSendReply = async (override = false) => {
@@ -406,7 +405,7 @@ export function EmailDetail() {
       form.append("body", html || plain);
       if (override) form.append("override", "true");
 
-      const res = await fetch(`${BACKEND}/api/emails/send`, { method: "POST", credentials: "include", body: form });
+      const res = await fetch("/api/emails/send", { method: "POST", credentials: "include", body: form });
       const json = await res.json();
 
       if (!json.success && json.threatBlocked) {

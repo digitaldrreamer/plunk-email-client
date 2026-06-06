@@ -298,7 +298,7 @@ export function MobileBottomNav() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium">{user?.name ?? "Me"}</p>
-                  <p className="text-xs text-muted-foreground truncate">{user?.email ?? "me@reclear.io"}</p>
+                  <p className="text-xs text-muted-foreground truncate">{user?.email ?? "me@team.reclear.io"}</p>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   <InstallButton iconOnly />

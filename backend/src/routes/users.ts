@@ -7,6 +7,7 @@ import { hashPassword, generateId, generateOneTimePassword, generateResetToken }
 import { requireAuth, requireAdmin } from "../middleware/auth";
 import { sendEmail } from "../lib/plunk";
 import { seedWelcomeEmail } from "../lib/welcome-email";
+import { normaliseTeamEmail, isValidEmail } from "../lib/email-address";
 
 const router = Router();
 router.use(requireAuth, requireAdmin);
@@ -43,6 +44,17 @@ router.post("/", async (req, res) => {
   if (!recoveryEmail?.trim()) {
     return res.status(400).json({ success: false, error: "recoveryEmail is required to send the invite" });
   }
+  if (!isValidEmail(recoveryEmail.trim())) {
+    return res.status(400).json({ success: false, error: "recoveryEmail is not a valid email address" });
+  }
+
+  // Sanitise: strip invalid characters, enforce @team.reclear.io domain
+  let teamEmail: string;
+  try {
+    teamEmail = normaliseTeamEmail(email);
+  } catch (err) {
+    return res.status(400).json({ success: false, error: (err as Error).message });
+  }
 
   const oneTimePassword = generateOneTimePassword();
   const now = new Date().toISOString();
@@ -51,7 +63,7 @@ router.post("/", async (req, res) => {
   const user = {
     id: generateId(),
     name: name.trim(),
-    email: email.toLowerCase().trim(),
+    email: teamEmail,
     passwordHash: hashPassword(oneTimePassword),
     recoveryEmail: recoveryEmail.trim(),
     role: role === "admin" ? "admin" : "user",
@@ -75,10 +87,13 @@ router.post("/", async (req, res) => {
 
   const frontendUrl = process.env.FRONTEND_URL ?? "http://localhost:3000";
 
-  // Seed a welcome email into the inbox so it's waiting when they log in
+  // DB-only: inserts a welcome message directly into the new user's inbox.
+  // No email is sent here — this is NOT a duplicate of the invite below.
   await seedWelcomeEmail({ name: user.name, email: user.email })
     .catch((err) => console.warn("[welcome] seed failed:", (err as Error).message));
 
+  // Real email: sends the invite + one-time credentials to the user's
+  // external recovery address (NOT their team.reclear.io inbox).
   await sendEmail({
     to: recoveryEmail.trim(),
     subject: `You've been invited to Reclear`,
@@ -106,6 +121,10 @@ router.patch("/:id", async (req, res) => {
   const { name, recoveryEmail, role, disabled } = req.body as {
     name?: string; recoveryEmail?: string; role?: string; disabled?: boolean;
   };
+
+  if (recoveryEmail !== undefined && recoveryEmail.trim() && !isValidEmail(recoveryEmail.trim())) {
+    return res.status(400).json({ success: false, error: "recoveryEmail is not a valid email address" });
+  }
 
   if (role === "user") {
     const admins = await db.select({ id: users.id }).from(users).where(eq(users.role, "admin"));

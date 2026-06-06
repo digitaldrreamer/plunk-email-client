@@ -6,8 +6,6 @@ import { useEmailStore } from "@/store/email-store";
 import { useAuthStore } from "@/store/auth-store";
 import type { Email } from "@/data/emails";
 
-const BACKEND = process.env.NEXT_PUBLIC_API_URL || "https://api.mail.reclear.io";
-
 export function useEmailStream() {
   const user = useAuthStore((s) => s.user);
   const addEmail = useEmailStore((s) => s.addEmail);
@@ -18,7 +16,8 @@ export function useEmailStream() {
     if (!user) return;
 
     const connect = () => {
-      const es = new EventSource(`${BACKEND}/api/emails/stream`, { withCredentials: true });
+      // Same-origin request — Next.js proxies to backend, cookies sent automatically
+      const es = new EventSource(`/api/emails/stream`, { withCredentials: true });
       esRef.current = es;
 
       es.addEventListener("new-email", (e) => {

@@ -118,7 +118,7 @@ function getInitials(name: string) {
 }
 
 function ParticipantAvatars({ thread }: { thread: Thread }) {
-  const others = thread.participants.filter((p) => p.email !== "me@reclear.io");
+  const others = thread.participants.filter((p) => p.email !== "me@team.reclear.io");
   const display = others.length > 0 ? others : thread.participants;
   const show = display.slice(0, 2);
 
@@ -400,7 +400,7 @@ export function EmailList() {
               const isCompact = density === "compact";
               const latest = thread.latestEmail;
 
-              const others = thread.participants.filter((p) => p.email !== "me@reclear.io");
+              const others = thread.participants.filter((p) => p.email !== "me@team.reclear.io");
               const senderLabel =
                 currentFolder === "sent" || currentFolder === "drafts"
                   ? `To: ${latest.to[0]?.name ?? "?"}`

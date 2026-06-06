@@ -46,7 +46,7 @@ export async function sendEmail(req: PlunkSendRequest): Promise<PlunkSendResult>
   const apiKey = process.env.PLUNK_SECRET_KEY;
   if (!apiKey) throw new Error("PLUNK_SECRET_KEY is not set");
 
-  const from = req.from ?? process.env.PLUNK_FROM_EMAIL ?? "noreply@reclear.io";
+  const from = req.from ?? process.env.PLUNK_FROM_EMAIL ?? "noreply@team.reclear.io";
 
   const body = {
     to: req.to,

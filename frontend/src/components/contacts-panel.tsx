@@ -59,8 +59,8 @@ export function ContactsPanel({ onBack }: { onBack?: () => void }) {
       const params = new URLSearchParams();
       if (query) params.set("q", query);
       else params.set("page", String(pg));
-      const res = await apiFetch<{ data: Contact[]; total: number }>(`/api/contacts?${params}`);
-      setContacts(pg === 1 || query ? res.data : (prev) => [...prev, ...res.data]);
+      const res = await apiFetch<{ items: Contact[]; total: number }>(`/api/contacts?${params}`);
+      setContacts(pg === 1 || query ? res.items : (prev) => [...prev, ...res.items]);
       setTotal(res.total);
     } catch {
       toast.error("Failed to load contacts");
