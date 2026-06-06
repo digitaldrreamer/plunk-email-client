@@ -7,25 +7,93 @@ import { useTheme } from "next-themes";
 
 type EmailTheme = "auto" | "light" | "dark";
 
-// Build scoped CSS for the iframe body based on resolved dark/light
-function buildBaseCss(isDark: boolean): string {
-  const themeVars = isDark
-    ? `html,body{background:#0a0a0a;color:#e5e7eb}a{color:#60a5fa}blockquote{border-color:#374151;color:#9ca3af}pre,code{background:#1f2937;color:#e5e7eb}`
-    : `html,body{background:#ffffff;color:#111827}a{color:#2563eb}blockquote{border-color:#d1d5db;color:#6b7280}pre,code{background:#f3f4f6;color:#111827}`;
+const DR_STYLE_ID = "__darkreader__";
 
+// Comprehensive dark-mode stylesheet injected into the iframe document imperatively.
+// Modelled after Dark Reader's dynamic theme approach — overrides background/text/link/border
+// colours with HSL-shifted values while preserving image fidelity.
+const DARK_MODE_CSS = `
+  html, body {
+    background: #181a1b !important;
+    color: #e8e6e3 !important;
+  }
+  body > * { color: #e8e6e3 !important; }
+  a { color: #3391ff !important; }
+  a:visited { color: #c07fef !important; }
+  blockquote {
+    border-color: #4a4a4a !important;
+    color: #b0aea9 !important;
+  }
+  pre, code {
+    background: #242729 !important;
+    color: #e8e6e3 !important;
+  }
+  table { border-color: #3a3d3f !important; }
+  td, th { border-color: #3a3d3f !important; }
+  hr { border-color: #3a3d3f !important; }
+
+  /* Invert dark text on light backgrounds — the most common email pattern */
+  [style*="background:#fff"],
+  [style*="background: #fff"],
+  [style*="background:#ffffff"],
+  [style*="background: #ffffff"],
+  [style*="background-color:#fff"],
+  [style*="background-color: #fff"],
+  [style*="background-color:#ffffff"],
+  [style*="background-color: #ffffff"],
+  [style*="background-color: white"],
+  [style*="background-color:white"] {
+    background-color: #181a1b !important;
+  }
+  [style*="background:#f"],
+  [style*="background: #f"],
+  [style*="background-color:#f"] {
+    background-color: #242729 !important;
+  }
+  [style*="color:#000"],
+  [style*="color: #000"],
+  [style*="color:#111"],
+  [style*="color: #111"],
+  [style*="color:#222"],
+  [style*="color: #222"],
+  [style*="color:#333"],
+  [style*="color: #333"],
+  [style*="color:#444"],
+  [style*="color: #444"],
+  [style*="color:black"],
+  [style*="color: black"] {
+    color: #e8e6e3 !important;
+  }
+  [style*="color:#555"],
+  [style*="color: #555"],
+  [style*="color:#666"],
+  [style*="color: #666"],
+  [style*="color:#777"],
+  [style*="color: #777"],
+  [style*="color:#888"],
+  [style*="color: #888"],
+  [style*="color:#999"],
+  [style*="color: #999"] {
+    color: #b0aea9 !important;
+  }
+  /* Images stay as-is — do not invert */
+  img, video, picture, canvas, svg { filter: none !important; }
+`;
+
+// Build scoped base CSS for the iframe (always light — dark mode applied imperatively)
+function buildBaseCss(): string {
   return `<style>
 *{box-sizing:border-box;-webkit-text-size-adjust:100%}
-html,body{margin:0;padding:0;word-break:break-word;overflow-wrap:break-word}
+html,body{margin:0;padding:0;word-break:break-word;overflow-wrap:break-word;background:#ffffff;color:#111827}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:14px;line-height:1.6;padding:0 2px 8px}
 img{max-width:100%!important;height:auto!important;display:inline-block}
-a{word-break:break-all}
+a{color:#2563eb;word-break:break-all}
 table{border-collapse:collapse;max-width:100%!important}
 td,th{vertical-align:top}
 p{margin:0 0 0.75em}
-blockquote{border-left:3px solid;padding-left:12px;margin:8px 0}
-pre,code{font-family:ui-monospace,monospace;font-size:13px;border-radius:3px;padding:1px 4px}
+blockquote{border-left:3px solid #d1d5db;padding-left:12px;margin:8px 0;color:#6b7280}
+pre,code{font-family:ui-monospace,monospace;font-size:13px;border-radius:3px;padding:1px 4px;background:#f3f4f6;color:#111827}
 pre{padding:10px;overflow-x:auto}
-${themeVars}
 </style>`;
 }
 
@@ -58,9 +126,9 @@ function restoreRemoteImages(html: string): string {
   );
 }
 
-function buildDoc(rawHtml: string, showImages: boolean, isDark: boolean): string {
+function buildDoc(rawHtml: string, showImages: boolean): string {
   const html = showImages ? restoreRemoteImages(rawHtml) : stripRemoteImages(rawHtml);
-  const baseCss = buildBaseCss(isDark);
+  const baseCss = buildBaseCss();
   const t   = html.trim();
   const low = t.toLowerCase();
 
@@ -95,7 +163,8 @@ export function EmailBodyFrame({ html, isDangerous = false, threatUrls = [] }: P
   const isDark = emailTheme === "dark" || (emailTheme === "auto" && appIsDark);
 
   const processedHtml = isDangerous ? applyDangerousOverlay(html, threatUrls) : html;
-  const srcdoc = buildDoc(processedHtml, showImages, isDark);
+  // srcdoc never changes on theme toggle — dark mode is applied imperatively via DOM
+  const srcdoc = buildDoc(processedHtml, showImages);
 
   useEffect(() => {
     setHeight(160);
@@ -103,6 +172,26 @@ export function EmailBodyFrame({ html, isDangerous = false, threatUrls = [] }: P
     setShowImages(false);
     setEmailTheme("auto");
   }, [html]);
+
+  // Inject / remove the dark-mode stylesheet into the iframe's document imperatively.
+  // Requires allow-same-origin (already set). No srcdoc change = no iframe reload.
+  useEffect(() => {
+    if (!loaded) return;
+    const doc = iframeRef.current?.contentDocument;
+    if (!doc) return;
+
+    const existing = doc.getElementById(DR_STYLE_ID);
+    if (isDark) {
+      if (!existing) {
+        const style = doc.createElement("style");
+        style.id = DR_STYLE_ID;
+        style.textContent = DARK_MODE_CSS;
+        doc.head.appendChild(style);
+      }
+    } else {
+      existing?.remove();
+    }
+  }, [isDark, loaded]);
 
   const onLoad = useCallback(() => {
     const doc = iframeRef.current?.contentDocument;

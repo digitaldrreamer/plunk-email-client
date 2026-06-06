@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import { useTheme } from "next-themes";
 import {
   SettingsIcon, LoaderIcon, CheckIcon, ShieldIcon, ShieldOffIcon,
   CopyIcon, DownloadIcon, QrCodeIcon, PenLineIcon, UserIcon,
-  LockIcon, ShieldCheckIcon,
+  LockIcon, ShieldCheckIcon, SunMoonIcon, SunIcon, MoonIcon, MonitorIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,15 +22,17 @@ import { useEmailStore } from "@/store/email-store";
 import { useAuthStore } from "@/store/auth-store";
 import { apiFetch } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 type TwoFAStep = "idle" | "setup" | "backup-codes" | "done" | "disable-confirm";
-type Tab = "signature" | "profile" | "password" | "security";
+type Tab = "signature" | "profile" | "password" | "security" | "appearance";
 
 const NAV_ITEMS: { id: Tab; label: string; icon: React.ElementType }[] = [
-  { id: "signature", label: "Signature", icon: PenLineIcon },
-  { id: "profile",   label: "Profile",   icon: UserIcon },
-  { id: "password",  label: "Password",  icon: LockIcon },
-  { id: "security",  label: "Security",  icon: ShieldCheckIcon },
+  { id: "signature",  label: "Signature",  icon: PenLineIcon },
+  { id: "profile",    label: "Profile",    icon: UserIcon },
+  { id: "password",   label: "Password",   icon: LockIcon },
+  { id: "security",   label: "Security",   icon: ShieldCheckIcon },
+  { id: "appearance", label: "Appearance", icon: SunMoonIcon },
 ];
 
 export function SettingsModal({
@@ -43,16 +46,20 @@ export function SettingsModal({
 }) {
   const { signature, setSignature } = useEmailStore();
   const { user, updateUser } = useAuthStore();
+  const { theme, setTheme } = useTheme();
   const editorRef = useRef<EmailEditorRef>(null);
 
+  const [mounted, setMounted] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>((defaultTab as Tab) || "signature");
+
+  useEffect(() => setMounted(true), []);
 
   // ── Signature ────────────────────────────────────────────────────────────────
 
   const handleSaveSignature = () => {
     const html = editorRef.current?.getHtml() ?? "";
     setSignature(html);
-    onClose();
+    toast.success("Signature saved");
   };
 
   // ── Profile ──────────────────────────────────────────────────────────────────
@@ -366,6 +373,37 @@ export function SettingsModal({
                     {pwLoading && <LoaderIcon className="size-3 animate-spin" />}
                     Change password
                   </Button>
+                </div>
+              </div>
+            )}
+
+            {/* ── Appearance ── */}
+            {activeTab === "appearance" && (
+              <div className="p-5 space-y-4">
+                <div>
+                  <h3 className="text-sm font-medium">Appearance</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">Choose how Reclear looks to you.</p>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {([
+                    { value: "light", label: "Light", Icon: SunIcon },
+                    { value: "dark",  label: "Dark",  Icon: MoonIcon },
+                    { value: "system", label: "System", Icon: MonitorIcon },
+                  ] as const).map(({ value, label, Icon }) => (
+                    <button
+                      key={value}
+                      onClick={() => setTheme(value)}
+                      className={cn(
+                        "flex flex-col items-center gap-2 rounded-xl border p-4 text-sm transition-colors",
+                        mounted && theme === value
+                          ? "border-primary bg-primary/5 text-foreground font-medium"
+                          : "border-border text-muted-foreground hover:bg-accent hover:text-foreground"
+                      )}
+                    >
+                      <Icon className="size-5" />
+                      {label}
+                    </button>
+                  ))}
                 </div>
               </div>
             )}

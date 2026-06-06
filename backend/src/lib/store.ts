@@ -1,4 +1,4 @@
-import { eq, and, type SQL } from "drizzle-orm";
+import { eq, and, or, like, type SQL } from "drizzle-orm";
 import { db } from "../db";
 import { emails } from "../db/schema";
 
@@ -67,12 +67,22 @@ export async function listEmails(filters: {
   tagId?: string;
   unread?: boolean;
   starred?: boolean;
+  userEmail?: string;
 }): Promise<StoredEmail[]> {
   const conditions: SQL[] = [];
   if (filters.folder) conditions.push(eq(emails.folder, filters.folder));
   if (filters.category) conditions.push(eq(emails.category, filters.category));
   if (filters.unread === true) conditions.push(eq(emails.read, false));
   if (filters.starred === true) conditions.push(eq(emails.starred, true));
+  // Scope to the requesting user — they own emails they sent or are a recipient of
+  if (filters.userEmail) {
+    conditions.push(
+      or(
+        eq(emails.fromEmail, filters.userEmail),
+        like(emails.toJson, `%"${filters.userEmail}"%`),
+      ) as SQL,
+    );
+  }
 
   const rows = await db.select().from(emails)
     .where(conditions.length ? and(...conditions) : undefined);
@@ -157,9 +167,10 @@ export async function updateEmail(id: string, patch: Partial<StoredEmail>): Prom
 export async function updateEmailByPlunkId(
   plunkEmailId: string,
   patch: Partial<StoredEmail>
-): Promise<void> {
+): Promise<StoredEmail | undefined> {
   const email = await getEmailByPlunkId(plunkEmailId);
-  if (email) await updateEmail(email.id, patch);
+  if (!email) return undefined;
+  return updateEmail(email.id, patch);
 }
 
 export async function deleteEmail(id: string): Promise<boolean> {

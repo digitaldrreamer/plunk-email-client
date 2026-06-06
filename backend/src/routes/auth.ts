@@ -83,6 +83,7 @@ router.post("/login", loginLimiter, async (req, res) => {
   const token = signToken({
     sub: user.id,
     email: user.email,
+    name: user.name,
     role: user.role as "admin" | "user",
     ...(user.mustChangePassword && { mustChangePassword: true }),
   });
@@ -137,7 +138,7 @@ router.post("/2fa/verify", loginLimiter, async (req, res) => {
   }
 
   const token = signToken({
-    sub: user.id, email: user.email, role: user.role as "admin" | "user",
+    sub: user.id, email: user.email, name: user.name, role: user.role as "admin" | "user",
     ...(user.mustChangePassword && { mustChangePassword: true }),
   });
 
@@ -182,7 +183,7 @@ router.post("/force-change-password", requireAuth, async (req, res) => {
   }).where(eq(users.id, req.user!.sub));
 
   const [fresh] = await db.select().from(users).where(eq(users.id, req.user!.sub)).limit(1);
-  const token = signToken({ sub: fresh.id, email: fresh.email, role: fresh.role as "admin" | "user" });
+  const token = signToken({ sub: fresh.id, email: fresh.email, name: fresh.name, role: fresh.role as "admin" | "user" });
 
   setAuthCookie(res, token);
 

@@ -60,7 +60,9 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { useEmailStore } from "@/store/email-store";
+import { useAuthStore } from "@/store/auth-store";
 import { getTag } from "@/data/tags";
 import type { Email } from "@/data/emails";
 import { EmailEditor, type EmailEditorRef } from "@/components/email-editor";
@@ -203,7 +205,8 @@ function EmailCard({
   isDangerous?: boolean;
   threatUrls?: string[];
 }) {
-  const isFromMe = email.from.email === "me@team.reclear.io";
+  const myEmail = useAuthStore((s) => s.user?.email ?? "");
+  const isFromMe = email.from.email === myEmail;
   const color = avatarColor(email.from.name);
   const initials = getInitials(email.from.name);
 
@@ -341,11 +344,17 @@ export function EmailDetail() {
     signature,
   } = useEmailStore();
 
+  const myEmail = useAuthStore((s) => s.user?.email ?? "");
+
   const [replyOpen, setReplyOpen] = useState(false);
   const [replySending, setReplySending] = useState(false);
   const [replyError, setReplyError] = useState("");
   const [replyThreatWarning, setReplyThreatWarning] = useState<{ threats: { url: string; threatTypes: string[] }[] } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [forwardOpen, setForwardOpen] = useState(false);
+  const [forwardTo, setForwardTo] = useState("");
+  const [forwardSending, setForwardSending] = useState(false);
+  const [forwardError, setForwardError] = useState("");
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const replyEditorRef = useRef<EmailEditorRef>(null);
   const replyInitialHtml = useMemo(
@@ -386,7 +395,7 @@ export function EmailDetail() {
     });
   };
 
-  const others = thread.participants.filter((p) => p.email !== "me@team.reclear.io");
+  const others = thread.participants.filter((p) => p.email !== myEmail);
   const replyTarget = others[0]?.name ?? "sender";
 
   const doSendReply = async (override = false) => {
@@ -427,6 +436,32 @@ export function EmailDetail() {
 
   const handleSendReply = () => doSendReply(false);
   const handleSendReplyAnyway = () => { setReplyThreatWarning(null); doSendReply(true); };
+
+  const doSendForward = async () => {
+    const to = forwardTo.trim();
+    if (!to) return;
+    setForwardSending(true);
+    setForwardError("");
+    try {
+      const latestEmail = thread.latestEmail;
+      const quotedBody = `<p><br></p><p>---------- Forwarded message ----------</p><p><b>From:</b> ${latestEmail.from.name} &lt;${latestEmail.from.email}&gt;</p><p><b>Subject:</b> ${thread.subject}</p><br>${latestEmail.body}`;
+
+      const form = new FormData();
+      form.append("to[]", to);
+      form.append("subject", thread.subject.startsWith("Fwd:") ? thread.subject : `Fwd: ${thread.subject}`);
+      form.append("body", quotedBody);
+
+      const res = await fetch("/api/emails/send", { method: "POST", credentials: "include", body: form });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error ?? "Send failed");
+      setForwardOpen(false);
+      setForwardTo("");
+    } catch (err) {
+      setForwardError(err instanceof Error ? err.message : "Send failed");
+    } finally {
+      setForwardSending(false);
+    }
+  };
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -618,7 +653,7 @@ export function EmailDetail() {
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
+        <div className="flex-1 overflow-y-scroll px-4 py-3 space-y-2">
           {thread.emails.map((email) => (
             <EmailCard
               key={email.id}
@@ -676,7 +711,7 @@ export function EmailDetail() {
               <ReplyIcon className="size-3.5" />
               Reply
             </Button>
-            <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
+            <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={() => { setForwardTo(""); setForwardError(""); setForwardOpen(true); }}>
               <ForwardIcon className="size-3.5" />
               Forward
             </Button>
@@ -693,6 +728,45 @@ export function EmailDetail() {
           </div>
         )}
       </div>
+
+      {/* Forward dialog */}
+      <Dialog open={forwardOpen} onOpenChange={(open) => { setForwardOpen(open); if (!open) setForwardError(""); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ForwardIcon className="size-4" />
+              Forward email
+            </DialogTitle>
+            <DialogDescription className="truncate text-xs">
+              {thread.subject.startsWith("Fwd:") ? thread.subject : `Fwd: ${thread.subject}`}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 pt-1">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium">To</label>
+              <Input
+                type="email"
+                placeholder="recipient@example.com"
+                value={forwardTo}
+                onChange={(e) => setForwardTo(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && doSendForward()}
+                autoFocus
+                disabled={forwardSending}
+              />
+            </div>
+            {forwardError && <p className="text-xs text-destructive">{forwardError}</p>}
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" size="sm" onClick={() => setForwardOpen(false)} disabled={forwardSending}>
+              Cancel
+            </Button>
+            <Button size="sm" onClick={doSendForward} disabled={forwardSending || !forwardTo.trim()} className="gap-1.5">
+              {forwardSending ? <LoaderIcon className="size-3 animate-spin" /> : <SendIcon className="size-3" />}
+              {forwardSending ? "Sending…" : "Forward"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Reply threat warning dialog */}
       <Dialog open={!!replyThreatWarning} onOpenChange={(open) => !open && setReplyThreatWarning(null)}>

@@ -35,6 +35,7 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useAuthStore } from "@/store/auth-store";
 import { apiFetch, apiUrl } from "@/lib/api";
+import { toast } from "sonner";
 
 interface UserRecord {
   id: string;
@@ -85,6 +86,9 @@ export function AdminUsersModal({ open, onClose }: { open: boolean; onClose: () 
   const [rpLoading, setRpLoading] = useState(false);
   const [rpError, setRpError] = useState("");
   const [rpSent, setRpSent] = useState(false);
+
+  // Delete confirmation
+  const [pendingDelete, setPendingDelete] = useState<UserRecord | null>(null);
 
   const loadUsers = useCallback(async () => {
     setLoading(true);
@@ -177,7 +181,13 @@ export function AdminUsersModal({ open, onClose }: { open: boolean; onClose: () 
   };
 
   const handleDelete = async (u: UserRecord) => {
-    if (!confirm(`Delete user "${u.name}" (${u.email})? This cannot be undone.`)) return;
+    setPendingDelete(u);
+  };
+
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
+    const u = pendingDelete;
+    setPendingDelete(null);
     try {
       const res = await fetch(apiUrl(`/api/users/${u.id}`), {
         method: "DELETE",
@@ -185,12 +195,13 @@ export function AdminUsersModal({ open, onClose }: { open: boolean; onClose: () 
       });
       if (!res.ok && res.status !== 204) {
         const j = await res.json();
-        alert(j.error ?? "Failed to delete");
+        toast.error(j.error ?? "Failed to delete user");
         return;
       }
       await loadUsers();
+      toast.success(`${u.name} deleted`);
     } catch {
-      alert("Failed to delete user");
+      toast.error("Failed to delete user");
     }
   };
 
@@ -201,12 +212,14 @@ export function AdminUsersModal({ open, onClose }: { open: boolean; onClose: () 
         body: JSON.stringify({ disabled: !u.disabled }),
       });
       await loadUsers();
+      toast.success(u.disabled ? `${u.name} re-enabled` : `${u.name} disabled`);
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to update");
+      toast.error(err instanceof Error ? err.message : "Failed to update user");
     }
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-lg max-h-[85vh] flex flex-col overflow-hidden">
         <DialogHeader className="shrink-0">
@@ -500,5 +513,22 @@ export function AdminUsersModal({ open, onClose }: { open: boolean; onClose: () 
         )}
       </DialogContent>
     </Dialog>
+
+    {/* Delete confirmation dialog */}
+    <Dialog open={!!pendingDelete} onOpenChange={(o) => { if (!o) setPendingDelete(null); }}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Delete user?</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">
+          This will permanently delete <strong>{pendingDelete?.name}</strong> ({pendingDelete?.email}). This cannot be undone.
+        </p>
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="outline" size="sm" onClick={() => setPendingDelete(null)}>Cancel</Button>
+          <Button variant="destructive" size="sm" onClick={confirmDelete}>Delete</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

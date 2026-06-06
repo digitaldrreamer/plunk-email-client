@@ -160,6 +160,7 @@ interface EmailStore {
   // Real-time
   addEmail: (email: Email) => void;
   patchEmail: (id: string, patch: Partial<Email>) => void;
+  removeEmail: (id: string) => void;
 }
 
 export const useEmailStore = create<EmailStore>((set, get) => ({
@@ -406,6 +407,13 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
   patchEmail: (id, patch) => {
     set((state) => ({
       emails: state.emails.map((e) => e.id === id ? { ...e, ...patch } : e),
+    }));
+  },
+
+  removeEmail: (id) => {
+    set((state) => ({
+      emails: state.emails.filter((e) => e.id !== id),
+      selectedThreadId: state.selectedThreadId === id ? null : state.selectedThreadId,
     }));
   },
 

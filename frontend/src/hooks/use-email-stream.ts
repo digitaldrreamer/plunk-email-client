@@ -10,6 +10,7 @@ export function useEmailStream() {
   const user = useAuthStore((s) => s.user);
   const addEmail = useEmailStore((s) => s.addEmail);
   const patchEmail = useEmailStore((s) => s.patchEmail);
+  const removeEmail = useEmailStore((s) => s.removeEmail);
   const esRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
@@ -37,6 +38,13 @@ export function useEmailStream() {
         try {
           const patch = JSON.parse(e.data) as { id: string } & Partial<Email>;
           patchEmail(patch.id, patch);
+        } catch { /* ignore */ }
+      });
+
+      es.addEventListener("email-deleted", (e) => {
+        try {
+          const { id } = JSON.parse(e.data) as { id: string };
+          removeEmail(id);
         } catch { /* ignore */ }
       });
 

@@ -5,6 +5,7 @@ import crypto from "crypto";
 export interface JwtPayload {
   sub: string;
   email: string;
+  name: string;
   role: "admin" | "user";
   mustChangePassword?: boolean;
   scope?: string; // "2fa" for the limited pre-2FA token

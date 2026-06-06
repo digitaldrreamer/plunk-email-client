@@ -15,7 +15,7 @@ export function ContentEditable({
 }: Props): JSX.Element {
   return (
     <LexicalContentEditable
-      className={`ContentEditable__root relative block min-h-72 overflow-auto px-4 py-2 focus:outline-none ${className ?? ""}`.trim()}
+      className={`ContentEditable__root relative block min-h-72 overflow-y-auto overflow-x-hidden px-4 py-2 focus:outline-none ${className ?? ""}`.trim()}
       aria-placeholder={placeholder}
       placeholder={
         <div

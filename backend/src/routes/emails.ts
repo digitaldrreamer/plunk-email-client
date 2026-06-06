@@ -61,7 +61,7 @@ router.post("/draft", async (req, res) => {
     id,
     messageId: id,
     threadId: `t-${id}`,
-    from: { name: req.user!.email.split("@")[0], email: req.user!.email },
+    from: { name: req.user!.name || req.user!.email.split("@")[0], email: req.user!.email },
     to: (to ?? []).map((addr) => ({ name: addr, email: addr })),
     subject: subject?.trim() || "(no subject)",
     body: body ?? "",
@@ -93,6 +93,7 @@ router.get("/", async (req, res) => {
     tagId: tag as string | undefined,
     unread: unread === "true" ? true : undefined,
     starred: starred === "true" ? true : undefined,
+    userEmail: req.user!.email,
   });
   res.json({ success: true, data: results });
 });
@@ -187,7 +188,7 @@ router.post(
       }));
 
       const senderEmail = req.user!.email;
-      const senderName = senderEmail.split("@")[0];
+      const senderName = req.user!.name || senderEmail.split("@")[0];
 
       const result = await sendEmail({
         to,
@@ -255,6 +256,7 @@ router.patch("/:id/read", async (req, res) => {
   const { read } = req.body as { read?: boolean };
   const updated = await updateEmail(req.params.id, { read: read ?? true });
   if (!updated) return res.status(404).json({ success: false, error: "Not found" });
+  sseEmit("email-updated", { id: updated.id, read: updated.read });
   res.json({ success: true, data: updated });
 });
 
@@ -264,6 +266,7 @@ router.patch("/:id/star", async (req, res) => {
   const email = await getEmail(req.params.id);
   if (!email) return res.status(404).json({ success: false, error: "Not found" });
   const updated = await updateEmail(req.params.id, { starred: !email.starred });
+  if (updated) sseEmit("email-updated", { id: updated.id, starred: updated.starred });
   res.json({ success: true, data: updated });
 });
 
@@ -274,6 +277,7 @@ router.patch("/:id/move", async (req, res) => {
   if (!folder) return res.status(400).json({ success: false, error: "folder required" });
   const updated = await updateEmail(req.params.id, { folder });
   if (!updated) return res.status(404).json({ success: false, error: "Not found" });
+  sseEmit("email-updated", { id: updated.id, folder: updated.folder });
   res.json({ success: true, data: updated });
 });
 
@@ -284,6 +288,7 @@ router.patch("/:id/tags", async (req, res) => {
   if (!Array.isArray(tagIds)) return res.status(400).json({ success: false, error: "tagIds must be array" });
   const updated = await updateEmail(req.params.id, { tagIds });
   if (!updated) return res.status(404).json({ success: false, error: "Not found" });
+  sseEmit("email-updated", { id: updated.id, tagIds: updated.tagIds });
   res.json({ success: true, data: updated });
 });
 
@@ -292,6 +297,7 @@ router.patch("/:id/tags", async (req, res) => {
 router.delete("/:id", async (req, res) => {
   const ok = await deleteEmail(req.params.id);
   if (!ok) return res.status(404).json({ success: false, error: "Not found" });
+  sseEmit("email-deleted", { id: req.params.id });
   res.status(204).send();
 });
 

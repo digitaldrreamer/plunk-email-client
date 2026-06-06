@@ -7,6 +7,7 @@ import { LoaderIcon, CheckIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { apiUrl } from "@/lib/api";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 function ResetPasswordForm() {
   const searchParams = useSearchParams();
@@ -52,7 +53,10 @@ function ResetPasswordForm() {
   };
 
   return (
-    <div className="min-h-[100dvh] flex items-center justify-center bg-background px-4">
+    <div className="relative min-h-[100dvh] flex items-center justify-center bg-background px-4">
+      <div className="absolute top-4 right-4">
+        <ThemeToggle />
+      </div>
       <div className="w-full max-w-sm space-y-6">
         {/* Logo */}
         <div className="flex flex-col items-center gap-3 text-center">

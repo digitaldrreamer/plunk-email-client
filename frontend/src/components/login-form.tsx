@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { OtpInput } from "@/components/otp-input";
 import { useAuthStore, type AuthUser } from "@/store/auth-store";
 import { apiUrl } from "@/lib/api";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 type Step = "credentials" | "two-factor" | "force-change";
 
@@ -135,7 +136,10 @@ export function LoginForm() {
   };
 
   return (
-    <div className="min-h-[100dvh] flex items-center justify-center bg-background px-4">
+    <div className="relative min-h-[100dvh] flex items-center justify-center bg-background px-4">
+      <div className="absolute top-4 right-4">
+        <ThemeToggle />
+      </div>
       <div className="w-full max-w-sm space-y-6">
         <div className="flex flex-col items-center gap-3 text-center">
           <Image src="/logo_transparent.png" alt="reclear" width={120} height={40} className="h-10 w-auto" />

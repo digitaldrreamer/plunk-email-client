@@ -181,7 +181,10 @@ async function eventsHandler(req: Request, res: Response): Promise<void> {
     // ── email.sent ─────────────────────────────────────────────────────────
     if ("sentAt" in event) {
       logger.info("Event: email sent", { action: "event_sent", contactEmail, emailId });
-      if (emailId) await updateEmailByPlunkId(emailId, { deliveryStatus: "sent" });
+      if (emailId) {
+        const updated = await updateEmailByPlunkId(emailId, { deliveryStatus: "sent" });
+        if (updated) sseEmit("email-updated", { id: updated.id, deliveryStatus: "sent" });
+      }
       return;
     }
 
@@ -189,10 +192,9 @@ async function eventsHandler(req: Request, res: Response): Promise<void> {
     if ("deliveredAt" in event) {
       logger.info("Event: email delivered", { action: "event_delivered", contactEmail, emailId });
       if (emailId) {
-        await updateEmailByPlunkId(emailId, {
-          deliveryStatus: "delivered",
-          deliveredAt: String(event.deliveredAt),
-        });
+        const patch = { deliveryStatus: "delivered", deliveredAt: String(event.deliveredAt) };
+        const updated = await updateEmailByPlunkId(emailId, patch);
+        if (updated) sseEmit("email-updated", { id: updated.id, ...patch });
       }
       return;
     }
@@ -203,11 +205,13 @@ async function eventsHandler(req: Request, res: Response): Promise<void> {
       const isFirst = event.isFirstOpen === true;
       logger.info("Event: email opened", { action: "event_open", contactEmail, emailId, opens, isFirst: event.isFirstOpen });
       if (emailId) {
-        await updateEmailByPlunkId(emailId, {
+        const patch = {
           deliveryStatus: "opened",
           openCount: opens,
           ...(isFirst && { firstOpenedAt: String(event.openedAt) }),
-        });
+        };
+        const updated = await updateEmailByPlunkId(emailId, patch);
+        if (updated) sseEmit("email-updated", { id: updated.id, ...patch });
       }
       return;
     }
@@ -218,11 +222,13 @@ async function eventsHandler(req: Request, res: Response): Promise<void> {
       const isFirst = event.isFirstClick === true;
       logger.info("Event: link clicked", { action: "event_click", contactEmail, emailId, clicks, link: event.link });
       if (emailId) {
-        await updateEmailByPlunkId(emailId, {
+        const patch = {
           deliveryStatus: "clicked",
           clickCount: clicks,
           ...(isFirst && { firstClickedAt: String(event.clickedAt) }),
-        });
+        };
+        const updated = await updateEmailByPlunkId(emailId, patch);
+        if (updated) sseEmit("email-updated", { id: updated.id, ...patch });
       }
       return;
     }
@@ -234,10 +240,12 @@ async function eventsHandler(req: Request, res: Response): Promise<void> {
 
       if (isPermanent) {
         if (emailId) {
-          await updateEmailByPlunkId(emailId, {
+          const patch = {
             deliveryStatus: "bounced",
             bouncedAt: String(event.bouncedAt ?? new Date().toISOString()),
-          });
+          };
+          const updated = await updateEmailByPlunkId(emailId, patch);
+          if (updated) sseEmit("email-updated", { id: updated.id, ...patch });
         }
         if (contactEmail) {
           await markContactBounced(contactEmail).catch(() => null);
@@ -257,7 +265,8 @@ async function eventsHandler(req: Request, res: Response): Promise<void> {
     if ("complainedAt" in event) {
       logger.warn("Event: spam complaint", { action: "event_complaint", contactEmail, emailId });
       if (emailId) {
-        await updateEmailByPlunkId(emailId, { deliveryStatus: "complained" });
+        const updated = await updateEmailByPlunkId(emailId, { deliveryStatus: "complained" });
+        if (updated) sseEmit("email-updated", { id: updated.id, deliveryStatus: "complained" });
       }
       if (contactEmail) {
         await markContactComplained(contactEmail).catch(() => null);

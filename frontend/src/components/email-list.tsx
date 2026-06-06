@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useEmailStore, type Thread } from "@/store/email-store";
 import { usePreferencesStore } from "@/store/preferences-store";
+import { useAuthStore } from "@/store/auth-store";
 import { getTag } from "@/data/tags";
 import type { Category } from "@/data/emails";
 import {
@@ -118,7 +119,8 @@ function getInitials(name: string) {
 }
 
 function ParticipantAvatars({ thread }: { thread: Thread }) {
-  const others = thread.participants.filter((p) => p.email !== "me@team.reclear.io");
+  const myEmail = useAuthStore((s) => s.user?.email ?? "");
+  const others = thread.participants.filter((p) => p.email !== myEmail);
   const display = others.length > 0 ? others : thread.participants;
   const show = display.slice(0, 2);
 
@@ -193,6 +195,7 @@ export function EmailList() {
     unreadCount,
   } = useEmailStore();
   const { density, setDensity } = usePreferencesStore();
+  const myEmail = useAuthStore((s) => s.user?.email ?? "");
 
   const [warnedIds, setWarnedIds] = useState<Set<string>>(new Set());
   const [pendingDangerThread, setPendingDangerThread] = useState<Thread | null>(null);
@@ -400,7 +403,7 @@ export function EmailList() {
               const isCompact = density === "compact";
               const latest = thread.latestEmail;
 
-              const others = thread.participants.filter((p) => p.email !== "me@team.reclear.io");
+              const others = thread.participants.filter((p) => p.email !== myEmail);
               const senderLabel =
                 currentFolder === "sent" || currentFolder === "drafts"
                   ? `To: ${latest.to[0]?.name ?? "?"}`

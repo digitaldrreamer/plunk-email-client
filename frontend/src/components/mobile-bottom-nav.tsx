@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { useRouter, usePathname } from "next/navigation";
 import {
   InboxIcon,
   SendIcon,
@@ -16,6 +17,7 @@ import {
   SettingsIcon,
   UsersIcon,
   LogOutIcon,
+  BookUserIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useEmailStore } from "@/store/email-store";
@@ -25,8 +27,6 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { InstallButton } from "@/components/install-button";
-import { SettingsModal } from "@/components/settings-modal";
-import { AdminUsersModal } from "@/components/admin-users-modal";
 import {
   Dialog,
   DialogContent,
@@ -60,6 +60,10 @@ const MORE_FOLDERS: { id: Folder; icon: React.ElementType; label: string }[] = [
 ];
 
 export function MobileBottomNav() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const isEmailRoute = pathname === "/";
+
   const {
     currentFolder,
     setFolder,
@@ -76,22 +80,23 @@ export function MobileBottomNav() {
   const handleLogout = async () => {
     await fetch(apiUrl("/api/auth/logout"), { method: "POST", credentials: "include" }).catch(() => {});
     clearAuth();
+    router.push("/");
   };
 
   const [moreOpen, setMoreOpen] = useState(false);
   const [addTagOpen, setAddTagOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [adminOpen, setAdminOpen] = useState(false);
   const [newTagName, setNewTagName] = useState("");
   const [newTagColor, setNewTagColor] = useState("blue");
 
   const handleFolder = (folder: Folder) => {
     setFolder(folder);
+    if (!isEmailRoute) router.push("/");
     setMoreOpen(false);
   };
 
   const handleTagFilter = (tagId: string) => {
     setTagFilter(activeTagFilter === tagId ? null : tagId);
+    if (!isEmailRoute) router.push("/");
     setMoreOpen(false);
   };
 
@@ -104,23 +109,23 @@ export function MobileBottomNav() {
   };
 
   const inMoreFolder = MORE_FOLDERS.some((f) => f.id === currentFolder);
+  const inSpecialPage = pathname === "/settings" || pathname === "/team" || pathname === "/contacts";
 
   return (
     <>
       {/* Bottom nav bar */}
       <nav className="fixed bottom-0 left-0 right-0 z-40 md:hidden">
-        {/* Subtle top border + blur */}
         <div className="border-t border-border bg-card/95 backdrop-blur-md">
           <div className="flex h-16 items-center justify-around px-2 pb-[env(safe-area-inset-bottom)]">
 
             {/* Left two: Inbox, Drafts */}
             {PRIMARY_NAV.slice(0, 2).map(({ id, icon: Icon, label }) => {
               const count = unreadCount(id);
-              const isActive = currentFolder === id;
+              const isActive = isEmailRoute && currentFolder === id;
               return (
                 <button
                   key={id}
-                  onClick={() => setFolder(id)}
+                  onClick={() => handleFolder(id)}
                   className={cn(
                     "relative flex flex-col items-center justify-center gap-0.5 h-12 w-14 rounded-xl transition-colors",
                     isActive ? "text-primary" : "text-muted-foreground"
@@ -137,9 +142,7 @@ export function MobileBottomNav() {
                   <span className={cn("text-[10px] leading-none", isActive ? "font-semibold" : "font-normal")}>
                     {label}
                   </span>
-                  {isActive && (
-                    <span className="absolute bottom-1 size-1 rounded-full bg-primary" />
-                  )}
+                  {isActive && <span className="absolute bottom-1 size-1 rounded-full bg-primary" />}
                 </button>
               );
             })}
@@ -155,11 +158,11 @@ export function MobileBottomNav() {
 
             {/* Right: Sent */}
             {PRIMARY_NAV.slice(2).map(({ id, icon: Icon, label }) => {
-              const isActive = currentFolder === id;
+              const isActive = isEmailRoute && currentFolder === id;
               return (
                 <button
                   key={id}
-                  onClick={() => setFolder(id)}
+                  onClick={() => handleFolder(id)}
                   className={cn(
                     "relative flex flex-col items-center justify-center gap-0.5 h-12 w-14 rounded-xl transition-colors",
                     isActive ? "text-primary" : "text-muted-foreground"
@@ -169,9 +172,7 @@ export function MobileBottomNav() {
                   <span className={cn("text-[10px] leading-none", isActive ? "font-semibold" : "font-normal")}>
                     {label}
                   </span>
-                  {isActive && (
-                    <span className="absolute bottom-1 size-1 rounded-full bg-primary" />
-                  )}
+                  {isActive && <span className="absolute bottom-1 size-1 rounded-full bg-primary" />}
                 </button>
               );
             })}
@@ -181,14 +182,14 @@ export function MobileBottomNav() {
               onClick={() => setMoreOpen(true)}
               className={cn(
                 "relative flex flex-col items-center justify-center gap-0.5 h-12 w-14 rounded-xl transition-colors",
-                (moreOpen || inMoreFolder) ? "text-primary" : "text-muted-foreground"
+                (moreOpen || inMoreFolder || inSpecialPage) ? "text-primary" : "text-muted-foreground"
               )}
             >
-              <MoreHorizontalIcon className={cn("size-5", (moreOpen || inMoreFolder) && "stroke-[2.5]")} />
-              <span className={cn("text-[10px] leading-none", (moreOpen || inMoreFolder) ? "font-semibold" : "font-normal")}>
+              <MoreHorizontalIcon className={cn("size-5", (moreOpen || inMoreFolder || inSpecialPage) && "stroke-[2.5]")} />
+              <span className={cn("text-[10px] leading-none", (moreOpen || inMoreFolder || inSpecialPage) ? "font-semibold" : "font-normal")}>
                 More
               </span>
-              {inMoreFolder && (
+              {(inMoreFolder || inSpecialPage) && !moreOpen && (
                 <span className="absolute bottom-1 size-1 rounded-full bg-primary" />
               )}
             </button>
@@ -228,7 +229,7 @@ export function MobileBottomNav() {
                 </p>
                 {MORE_FOLDERS.map(({ id, icon: Icon, label }) => {
                   const count = unreadCount(id);
-                  const isActive = currentFolder === id;
+                  const isActive = isEmailRoute && currentFolder === id;
                   return (
                     <button
                       key={id}
@@ -250,6 +251,36 @@ export function MobileBottomNav() {
                     </button>
                   );
                 })}
+              </div>
+
+              <Separator />
+
+              {/* Team + Contacts */}
+              <div className="space-y-0.5">
+                <button
+                  onClick={() => { setMoreOpen(false); router.push("/team"); }}
+                  className={cn(
+                    "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors",
+                    pathname === "/team"
+                      ? "bg-accent text-foreground font-medium"
+                      : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                  )}
+                >
+                  <UsersIcon className="size-4 shrink-0" />
+                  Team
+                </button>
+                <button
+                  onClick={() => { setMoreOpen(false); router.push("/contacts"); }}
+                  className={cn(
+                    "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors",
+                    pathname === "/contacts"
+                      ? "bg-accent text-foreground font-medium"
+                      : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                  )}
+                >
+                  <BookUserIcon className="size-4 shrink-0" />
+                  Contacts
+                </button>
               </div>
 
               <Separator />
@@ -304,24 +335,14 @@ export function MobileBottomNav() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium">{user?.name ?? "Me"}</p>
-                  <p className="text-xs text-muted-foreground truncate">{user?.email ?? "me@team.reclear.io"}</p>
+                  <p className="text-xs text-muted-foreground truncate">{user?.email ?? ""}</p>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
-                  {user?.role === "admin" && (
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      className="text-muted-foreground"
-                      onClick={() => { setMoreOpen(false); setAdminOpen(true); }}
-                    >
-                      <UsersIcon className="size-4" />
-                    </Button>
-                  )}
                   <Button
                     variant="ghost"
                     size="icon-xs"
                     className="text-muted-foreground"
-                    onClick={() => { setMoreOpen(false); setSettingsOpen(true); }}
+                    onClick={() => { setMoreOpen(false); router.push("/settings"); }}
                   >
                     <SettingsIcon className="size-4" />
                   </Button>
@@ -339,9 +360,6 @@ export function MobileBottomNav() {
           </div>
         </div>
       )}
-
-      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
-      <AdminUsersModal open={adminOpen} onClose={() => setAdminOpen(false)} />
 
       {/* Add tag dialog */}
       <Dialog open={addTagOpen} onOpenChange={setAddTagOpen}>

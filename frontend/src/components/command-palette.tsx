@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   InboxIcon, SendIcon, FileIcon, ArchiveIcon, Trash2Icon, StarIcon,
   PenSquareIcon, UsersIcon, SettingsIcon, ShieldIcon, BookUserIcon,
@@ -20,16 +21,12 @@ import type { Folder } from "@/data/emails";
 import { useAuthStore } from "@/store/auth-store";
 import { useTheme } from "next-themes";
 
-interface Props {
-  onOpenSettings: (tab?: string) => void;
-  onOpenContacts: () => void;
-}
-
-export function CommandPalette({ onOpenSettings, onOpenContacts }: Props) {
+export function CommandPalette() {
   const [open, setOpen] = useState(false);
   const { setFolder, setComposing, setFilter } = useEmailStore();
   const { user } = useAuthStore();
   const { theme, setTheme } = useTheme();
+  const router = useRouter();
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -44,7 +41,7 @@ export function CommandPalette({ onOpenSettings, onOpenContacts }: Props) {
 
   const run = (fn: () => void) => { setOpen(false); fn(); };
 
-  const goToFolder = (folder: Folder) => run(() => setFolder(folder));
+  const goToFolder = (folder: Folder) => run(() => { setFolder(folder); router.push("/"); });
 
   return (
     <CommandDialog open={open} onOpenChange={setOpen}>
@@ -79,21 +76,24 @@ export function CommandPalette({ onOpenSettings, onOpenContacts }: Props) {
           <CommandItem onSelect={() => run(() => setComposing(true))}>
             <PenSquareIcon className="size-4 mr-2" /> Compose new email
           </CommandItem>
-          <CommandItem onSelect={() => run(onOpenContacts)}>
+          <CommandItem onSelect={() => run(() => router.push("/contacts"))}>
             <BookUserIcon className="size-4 mr-2" /> Contacts
+          </CommandItem>
+          <CommandItem onSelect={() => run(() => router.push("/team"))}>
+            <UsersIcon className="size-4 mr-2" /> Team
           </CommandItem>
         </CommandGroup>
 
         <CommandSeparator />
 
         <CommandGroup heading="Settings">
-          <CommandItem onSelect={() => run(() => onOpenSettings("profile"))}>
+          <CommandItem onSelect={() => run(() => router.push("/settings?tab=profile"))}>
             <UsersIcon className="size-4 mr-2" /> Profile settings
           </CommandItem>
-          <CommandItem onSelect={() => run(() => onOpenSettings("security"))}>
+          <CommandItem onSelect={() => run(() => router.push("/settings?tab=security"))}>
             <ShieldIcon className="size-4 mr-2" /> Security & 2FA
           </CommandItem>
-          <CommandItem onSelect={() => run(() => onOpenSettings("signature"))}>
+          <CommandItem onSelect={() => run(() => router.push("/settings?tab=signature"))}>
             <SettingsIcon className="size-4 mr-2" /> Email signature
           </CommandItem>
           <CommandItem onSelect={() => run(() => setTheme(theme === "dark" ? "light" : "dark"))}>
@@ -108,8 +108,8 @@ export function CommandPalette({ onOpenSettings, onOpenContacts }: Props) {
           <>
             <CommandSeparator />
             <CommandGroup heading="Admin">
-              <CommandItem onSelect={() => run(() => onOpenSettings())}>
-                <UsersIcon className="size-4 mr-2" /> Manage users
+              <CommandItem onSelect={() => run(() => router.push("/team"))}>
+                <UsersIcon className="size-4 mr-2" /> Manage team
               </CommandItem>
             </CommandGroup>
           </>
