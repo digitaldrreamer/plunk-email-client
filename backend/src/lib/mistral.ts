@@ -57,7 +57,10 @@ Rules:
    - promotions: marketing, newsletters, offers, discounts
    - forums: mailing lists, GitHub notifications, community digests
 
-2. "folder": "inbox" unless it looks like spam/phishing (folder:"spam") or auto-generated bulk with no value (folder:"inbox")
+2. "folder": use "spam" for ANY of the following — otherwise use "inbox":
+   - Phishing signals: suspicious URLs (domain doesn't match the claimed sender), urgency + credential harvesting, mismatched sender identity
+   - Known spam patterns: unsolicited bulk offers, lottery/prize scams, advance-fee fraud
+   - High-confidence spam regardless of how legitimate it looks
 
 3. "matchedTagIds": array of IDs from the provided existing tags list that genuinely apply. Empty array if none fit well.
 
@@ -110,10 +113,11 @@ export async function fixEmailSpelling(html: string): Promise<SpellFixResult> {
 
 Rules:
 - Preserve ALL HTML tags exactly as-is — only change visible text content
-- Fix spelling errors and obvious grammar mistakes
+- NEVER touch content inside <pre>, <code>, <tt>, or <kbd> tags — treat it as literal code
+- Fix spelling errors and obvious grammar mistakes in prose text only
 - Do NOT rephrase, reword, or change sentence structure
 - Do NOT change punctuation style, capitalization style, or tone
-- Do NOT fix intentional informal language (gonna, wanna, etc.)
+- Do NOT fix intentional informal language (gonna, wanna, kinda, etc.)
 - If nothing needs fixing, return the input unchanged
 
 Return ONLY a JSON object with this exact shape:
@@ -135,10 +139,11 @@ Return ONLY a JSON object with this exact shape:
   const raw = response.choices?.[0]?.message?.content ?? "{}";
   const parsed = JSON.parse(typeof raw === "string" ? raw : JSON.stringify(raw));
 
+  const changes = Array.isArray(parsed.changes) ? parsed.changes : [];
   return {
     corrected: parsed.corrected ?? html,
-    changeCount: parsed.changeCount ?? 0,
-    changes: Array.isArray(parsed.changes) ? parsed.changes : [],
+    changeCount: changes.length,
+    changes,
   };
 }
 
