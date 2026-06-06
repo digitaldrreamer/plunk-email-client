@@ -123,7 +123,7 @@ router.post("/2fa/verify", loginLimiter, async (req, res) => {
     return res.status(401).json({ success: false, error: "2FA not configured" });
   }
 
-  const totpOk = verifyTotp(code, user.twoFactorSecret);
+  const totpOk = await verifyTotp(code, user.twoFactorSecret);
   if (!totpOk) {
     const storedHashes: string[] = JSON.parse(user.twoFactorBackupCodes ?? "[]");
     const codeHash = crypto.createHash("sha256").update(code.toUpperCase().replace(/\s/g, "")).digest("hex");
@@ -309,7 +309,7 @@ router.post("/2fa/enable", requireAuth, async (req, res) => {
   if (user.twoFactorEnabled) {
     return res.status(400).json({ success: false, error: "2FA already enabled" });
   }
-  if (!verifyTotp(code, user.twoFactorSecret)) {
+  if (!(await verifyTotp(code, user.twoFactorSecret))) {
     logger.warn("2FA enable: bad code", { action: "2fa_enable", userId: req.user!.sub, ip: req.ip });
     return res.status(400).json({ success: false, error: "Incorrect code. Check your authenticator and try again." });
   }
