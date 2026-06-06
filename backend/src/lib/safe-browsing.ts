@@ -25,13 +25,23 @@ export async function checkUrlSafety(html: string): Promise<ThreatMatch[]> {
   const urls = extractUrls(html);
   if (!urls.length) return [];
 
-  const params = new URLSearchParams({ key: apiKey, "$alt": "json" });
-  for (const url of urls) params.append("urls", url);
-
   let res: Response;
   try {
     res = await fetch(
-      `https://safebrowsing.googleapis.com/v5alpha1/urls:search?${params.toString()}`
+      `https://safebrowsing.googleapis.com/v4/threatMatches:find?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          client: { clientId: "reclear-email", clientVersion: "1.0.0" },
+          threatInfo: {
+            threatTypes: ["MALWARE", "SOCIAL_ENGINEERING", "UNWANTED_SOFTWARE", "POTENTIALLY_HARMFUL_APPLICATION"],
+            platformTypes: ["ANY_PLATFORM"],
+            threatEntryTypes: ["URL"],
+            threatEntries: urls.map((url) => ({ url })),
+          },
+        }),
+      }
     );
   } catch (err) {
     console.warn("[safe-browsing] fetch failed:", (err as Error).message);
@@ -44,6 +54,9 @@ export async function checkUrlSafety(html: string): Promise<ThreatMatch[]> {
     return [];
   }
 
-  const data = await res.json() as { threats?: { url: string; threatTypes: string[] }[] };
-  return data.threats ?? [];
+  const data = await res.json() as { matches?: { threat: { url: string }; threatType: string }[] };
+  return (data.matches ?? []).map((m) => ({
+    url: m.threat.url,
+    threatTypes: [m.threatType],
+  }));
 }
