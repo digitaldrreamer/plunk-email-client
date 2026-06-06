@@ -1,12 +1,16 @@
 #!/usr/bin/env tsx
 /**
- * Create an admin user.
+ * Create an admin user and send an invite email to their recovery address.
+ *
+ * Usage (non-interactive / CI):
+ *   npx tsx scripts/create-admin.ts \
+ *     --name "Alice" \
+ *     --email alice@reclear.io \
+ *     --recovery-email alice@gmail.com \
+ *     [--role admin|user]
  *
  * Usage (interactive):
  *   npx tsx scripts/create-admin.ts
- *
- * Usage (non-interactive / CI):
- *   npx tsx scripts/create-admin.ts --name "Alice" --email alice@example.com --password secret123
  */
 
 import "dotenv/config";
@@ -14,7 +18,12 @@ import { createInterface } from "readline";
 import { eq } from "drizzle-orm";
 import { db } from "../src/db";
 import { users } from "../src/db/schema";
-import { hashPassword, generateId } from "../src/lib/auth";
+import {
+  hashPassword,
+  generateId,
+  generateOneTimePassword,
+} from "../src/lib/auth";
+import { sendEmail } from "../src/lib/plunk";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -27,63 +36,35 @@ function prompt(rl: ReturnType<typeof createInterface>, question: string): Promi
   return new Promise((resolve) => rl.question(question, resolve));
 }
 
-function promptPassword(question: string): Promise<string> {
-  return new Promise((resolve) => {
-    process.stdout.write(question);
-    // Hide input when stdin is a TTY
-    if (process.stdin.isTTY) process.stdin.setRawMode(true);
-    let input = "";
-    process.stdin.resume();
-    process.stdin.setEncoding("utf8");
-    const onData = (ch: string) => {
-      if (ch === "\n" || ch === "\r" || ch === "") {
-        if (process.stdin.isTTY) process.stdin.setRawMode(false);
-        process.stdin.pause();
-        process.stdin.removeListener("data", onData);
-        process.stdout.write("\n");
-        if (ch === "") process.exit(1);
-        resolve(input);
-      } else if (ch === "") {
-        input = input.slice(0, -1);
-      } else {
-        input += ch;
-      }
-    };
-    process.stdin.on("data", onData);
-  });
-}
-
 // ── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
-  let name = arg("--name");
-  let email = arg("--email");
-  let password = arg("--password");
-  let role = (arg("--role") ?? "admin") as "admin" | "user";
+  let name          = arg("--name");
+  let email         = arg("--email");
+  let recoveryEmail = arg("--recovery-email");
+  const role        = (arg("--role") ?? "admin") as "admin" | "user";
 
-  const interactive = !name || !email || !password;
-
-  if (interactive) {
+  if (!name || !email || !recoveryEmail) {
     const rl = createInterface({ input: process.stdin, output: process.stdout });
     console.log("\n  reclear — create admin\n");
-
-    if (!name) name = (await prompt(rl, "  Name:     ")).trim();
-    if (!email) email = (await prompt(rl, "  Email:    ")).trim().toLowerCase();
+    if (!name)          name          = (await prompt(rl, "  Name:           ")).trim();
+    if (!email)         email         = (await prompt(rl, "  Email:          ")).trim().toLowerCase();
+    if (!recoveryEmail) recoveryEmail = (await prompt(rl, "  Recovery email: ")).trim().toLowerCase();
     rl.close();
-    if (!password) password = await promptPassword("  Password: ");
   }
 
   // ── Validate ──────────────────────────────────────────────────────────────
-  if (!name || !email || !password) {
-    console.error("  ✗  name, email, and password are all required");
+  const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!name || !email || !recoveryEmail) {
+    console.error("  ✗  name, email, and recovery-email are all required");
     process.exit(1);
   }
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+  if (!emailRe.test(email)) {
     console.error("  ✗  invalid email address");
     process.exit(1);
   }
-  if (password.length < 8) {
-    console.error("  ✗  password must be at least 8 characters");
+  if (!emailRe.test(recoveryEmail)) {
+    console.error("  ✗  invalid recovery email address");
     process.exit(1);
   }
   if (role !== "admin" && role !== "user") {
@@ -94,28 +75,59 @@ async function main() {
   // ── Check for duplicate ───────────────────────────────────────────────────
   const [existing] = await db.select({ id: users.id }).from(users)
     .where(eq(users.email, email)).limit(1);
-
   if (existing) {
     console.error(`  ✗  a user with email "${email}" already exists`);
     process.exit(1);
   }
 
   // ── Insert ────────────────────────────────────────────────────────────────
+  const oneTimePassword = generateOneTimePassword();
   const now = new Date().toISOString();
+
   const [created] = await db.insert(users).values({
     id: generateId(),
     name,
     email,
-    passwordHash: hashPassword(password),
-    recoveryEmail: null,
+    passwordHash: hashPassword(oneTimePassword),
+    recoveryEmail,
     role,
     disabled: false,
+    mustChangePassword: true,
     lastLoginAt: null,
     createdAt: now,
     updatedAt: now,
   }).returning({ id: users.id, name: users.name, email: users.email, role: users.role });
 
-  console.log(`\n  ✓  Created ${created.role}: ${created.name} <${created.email}> (id: ${created.id})\n`);
+  // ── Send invite email ─────────────────────────────────────────────────────
+  const frontendUrl = process.env.FRONTEND_URL ?? "http://localhost:3000";
+
+  const sent = await sendEmail({
+    to: recoveryEmail,
+    subject: `You've been invited to Reclear`,
+    body: `
+<div style="font-family:sans-serif;max-width:480px;margin:0 auto;">
+  <h2 style="margin-bottom:4px;">You're in.</h2>
+  <p style="color:#6b7280;margin-top:0;">You have been added to Reclear as <strong>${role}</strong>.</p>
+  <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0;">
+  <p>Your login details:</p>
+  <table style="border-collapse:collapse;width:100%;">
+    <tr><td style="padding:6px 0;color:#6b7280;width:120px;">Email</td><td style="font-weight:600;">${email}</td></tr>
+    <tr><td style="padding:6px 0;color:#6b7280;">Temp password</td><td><code style="background:#f3f4f6;padding:2px 6px;border-radius:4px;font-size:14px;">${oneTimePassword}</code></td></tr>
+  </table>
+  <p style="color:#6b7280;font-size:13px;margin-top:4px;">You'll be asked to set a new password on your first login.</p>
+  <a href="${frontendUrl}" style="display:inline-block;margin-top:16px;background:#111827;color:#fff;text-decoration:none;padding:10px 20px;border-radius:6px;font-size:14px;">Sign in to Reclear →</a>
+</div>`.trim(),
+  }).then(() => true).catch((err) => {
+    console.warn("  ⚠  invite email failed:", (err as Error).message);
+    return false;
+  });
+
+  console.log(`\n  ✓  Created ${created.role}: ${created.name} <${created.email}> (id: ${created.id})`);
+  console.log(sent
+    ? `  ✓  Invite email sent to ${recoveryEmail}`
+    : `  ⚠  Created but invite email failed — send manually via the admin panel`
+  );
+  console.log();
   process.exit(0);
 }
 
