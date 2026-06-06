@@ -2,8 +2,10 @@ import { Router } from "express";
 import { eq } from "drizzle-orm";
 import { db } from "../db";
 import { tags } from "../db/schema";
+import { requireAuth } from "../middleware/auth";
 
 const router = Router();
+router.use(requireAuth);
 
 router.get("/", async (_req, res) => {
   const all = await db.select().from(tags);

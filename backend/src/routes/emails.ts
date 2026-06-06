@@ -16,10 +16,11 @@ import { requireAuth } from "../middleware/auth";
 import { addSseClient, removeSseClient } from "../lib/sse";
 
 const router = Router();
+router.use(requireAuth);
 
 // ── SSE stream ────────────────────────────────────────────────────────────────
 
-router.get("/stream", requireAuth, (req, res) => {
+router.get("/stream", (req, res) => {
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");

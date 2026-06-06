@@ -12,7 +12,13 @@ import {
   verifyTwoFactorTemp,
 } from "../lib/auth";
 import { requireAuth } from "../middleware/auth";
+import { rateLimit } from "../lib/rate-limit";
 import { generateTotpSecret, totpQrCodeUrl, verifyTotp } from "../lib/totp";
+
+// 10 attempts per 15 minutes per IP for login and 2FA
+const loginLimiter = rateLimit(10, 15 * 60_000);
+// 5 attempts per 15 minutes per IP for password reset
+const resetLimiter = rateLimit(5, 15 * 60_000);
 
 const router = Router();
 
@@ -46,7 +52,7 @@ function generateBackupCodes(): { plain: string[]; hashed: string[] } {
 
 // ── Login ─────────────────────────────────────────────────────────────────────
 
-router.post("/login", async (req, res) => {
+router.post("/login", loginLimiter, async (req, res) => {
   const { email, password } = req.body as { email?: string; password?: string };
   if (!email || !password) {
     return res.status(400).json({ success: false, error: "email and password required" });
@@ -93,7 +99,7 @@ router.post("/login", async (req, res) => {
 
 // ── Complete 2FA login ────────────────────────────────────────────────────────
 
-router.post("/2fa/verify", async (req, res) => {
+router.post("/2fa/verify", loginLimiter, async (req, res) => {
   const { tempToken, code } = req.body as { tempToken?: string; code?: string };
   if (!tempToken || !code) {
     return res.status(400).json({ success: false, error: "tempToken and code required" });
@@ -182,7 +188,7 @@ router.post("/force-change-password", requireAuth, async (req, res) => {
 
 // ── Reset password via token (from email link) ────────────────────────────────
 
-router.post("/reset-password", async (req, res) => {
+router.post("/reset-password", resetLimiter, async (req, res) => {
   const { token, newPassword } = req.body as { token?: string; newPassword?: string };
   if (!token || !newPassword) {
     return res.status(400).json({ success: false, error: "token and newPassword required" });
