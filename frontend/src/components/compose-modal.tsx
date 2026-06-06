@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useRef, useState, useMemo, useCallback, useEffect, KeyboardEvent } from "react";
-import { XIcon, SendIcon, PaperclipIcon, MinimizeIcon, SaveIcon, LoaderIcon, ShieldAlertIcon, RotateCcwIcon } from "lucide-react";
+import { XIcon, SendIcon, PaperclipIcon, MinimizeIcon, SaveIcon, LoaderIcon, ShieldAlertIcon, RotateCcwIcon, SparklesIcon, SpellCheckIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -209,6 +209,7 @@ export function ComposeModal() {
   const [hasDraft, setHasDraft] = useState(() => loadDraft() !== null);
   const [attachments, setAttachments] = useState<File[]>([]);
   const [sending, setSending] = useState(false);
+  const [aiWorking, setAiWorking] = useState<"compose" | "spell" | null>(null);
   const [error, setError] = useState("");
   const [threatWarning, setThreatWarning] = useState<{ threats: { url: string; threatTypes: string[] }[] } | null>(null);
   const editorRef = useRef<EmailEditorRef>(null);
@@ -260,6 +261,59 @@ export function ComposeModal() {
     setAttachments([]);
     setError("");
     setHasDraft(false);
+  };
+
+  const handleAiCompose = async () => {
+    const instruction = window.prompt("What should the email say? Give a brief instruction.");
+    if (!instruction?.trim()) return;
+    setAiWorking("compose");
+    setError("");
+    try {
+      const res = await fetch(`${BACKEND}/api/ai/compose`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          subject,
+          messages: [],
+          instruction,
+        }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error ?? "AI compose failed");
+      const { subject: aiSubject, body: aiBody } = json.data as { subject: string; body: string };
+      if (aiSubject && !subject) setSubject(aiSubject);
+      editorRef.current?.setHtml(aiBody);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "AI compose failed");
+    } finally {
+      setAiWorking(null);
+    }
+  };
+
+  const handleSpellFix = async () => {
+    const html = editorRef.current?.getHtml() ?? "";
+    if (!html.trim()) return;
+    setAiWorking("spell");
+    setError("");
+    try {
+      const res = await fetch(`${BACKEND}/api/ai/fix-spelling`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ html }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error ?? "Spell fix failed");
+      const { corrected, changeCount } = json.data as { corrected: string; changeCount: number };
+      editorRef.current?.setHtml(corrected);
+      if (changeCount === 0) toast("No spelling issues found", { duration: 2000 });
+      else toast(`Fixed ${changeCount} issue${changeCount !== 1 ? "s" : ""}`, { duration: 2000 });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Spell fix failed");
+    } finally {
+      setAiWorking(null);
+    }
   };
 
   const doSend = async (override = false) => {
@@ -461,7 +515,7 @@ export function ComposeModal() {
 
         {/* Footer */}
         <div className="flex items-center justify-between px-4 py-3">
-          {/* Left: attach */}
+          {/* Left: attach + AI */}
           <div className="flex items-center gap-1">
             <input
               ref={fileInputRef}
@@ -477,6 +531,30 @@ export function ComposeModal() {
               onClick={() => fileInputRef.current?.click()}
             >
               <PaperclipIcon className="size-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              title="Generate with AI"
+              className="text-muted-foreground"
+              onClick={handleAiCompose}
+              disabled={!!aiWorking || sending}
+            >
+              {aiWorking === "compose"
+                ? <LoaderIcon className="size-4 animate-spin" />
+                : <SparklesIcon className="size-4" />}
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              title="Fix spelling & grammar"
+              className="text-muted-foreground"
+              onClick={handleSpellFix}
+              disabled={!!aiWorking || sending}
+            >
+              {aiWorking === "spell"
+                ? <LoaderIcon className="size-4 animate-spin" />
+                : <SpellCheckIcon className="size-4" />}
             </Button>
           </div>
 

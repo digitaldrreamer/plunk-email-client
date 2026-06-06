@@ -58,6 +58,7 @@ function EditorRefPlugin({ editorRef }: { editorRef: React.MutableRefObject<Lexi
 export interface EmailEditorRef {
   getHtml: () => string;
   getPlainText: () => string;
+  setHtml: (html: string) => void;
   clear: () => void;
 }
 
@@ -97,6 +98,19 @@ export const EmailEditor = forwardRef<EmailEditorRef, EmailEditorProps>(
           text = $getRoot().getTextContent();
         });
         return text;
+      },
+      setHtml: (html: string) => {
+        const editor = editorRef.current;
+        if (!editor) return;
+        editor.update(() => {
+          const parser = new DOMParser();
+          const dom = parser.parseFromString(html, "text/html");
+          const nodes = $generateNodesFromDOM(editor, dom);
+          const root = $getRoot();
+          root.clear();
+          root.select();
+          $insertNodes(nodes);
+        });
       },
       clear: () => {
         editorRef.current?.update(() => {
