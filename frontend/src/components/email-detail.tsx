@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { EmailBodyFrame } from "@/components/email-body-frame";
 import { format } from "date-fns";
 import { LoaderIcon } from "lucide-react";
 import {
@@ -71,20 +72,6 @@ function isHtmlBody(body: string) {
   return /<[a-z][\s\S]*>/i.test(body);
 }
 
-function processBodyHtml(html: string, isDangerous: boolean, threatUrls: string[] = []): string {
-  if (!isDangerous) return html;
-  const threatSet = new Set(threatUrls);
-  // Replace all <a ...> tags: threat URLs get red highlight, others get strikethrough
-  return html.replace(/<a(\s[^>]*)>([\s\S]*?)<\/a>/gi, (_, attrs, content) => {
-    const hrefMatch = attrs.match(/href=["']([^"']+)["']/i);
-    const url = hrefMatch?.[1] ?? "";
-    if (threatSet.has(url)) {
-      const display = url.length > 60 ? url.slice(0, 57) + "…" : url;
-      return `<span style="display:inline-flex;align-items:center;gap:4px;background:rgba(239,68,68,0.12);color:#dc2626;padding:1px 6px;border-radius:4px;text-decoration:underline;text-decoration-color:#dc2626;cursor:not-allowed;font-weight:500;" title="Dangerous URL blocked: ${url.replace(/"/g, "&quot;")}">⚠ ${content} <span style="font-size:0.75em;opacity:0.8;">(${display})</span></span>`;
-    }
-    return `<span style="text-decoration:line-through;color:#9ca3af;cursor:not-allowed;pointer-events:none;" title="Link disabled in dangerous email">${content}</span>`;
-  });
-}
 
 function getFileIcon(type: string) {
   if (type.includes("pdf") || type.includes("word") || type.includes("document") || type.includes("text")) return FileTextIcon;
@@ -289,10 +276,10 @@ function EmailCard({
             </div>
           )}
           {isHtmlBody(email.body) ? (
-            <div
-              className="prose prose-sm dark:prose-invert max-w-none text-sm leading-relaxed text-foreground/90 [&_a]:pointer-events-none"
-              // eslint-disable-next-line react/no-danger
-              dangerouslySetInnerHTML={{ __html: processBodyHtml(email.body, !!isDangerous, threatUrls) }}
+            <EmailBodyFrame
+              html={email.body}
+              isDangerous={!!isDangerous}
+              threatUrls={threatUrls}
             />
           ) : (
             <div className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/90">
