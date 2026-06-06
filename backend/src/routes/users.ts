@@ -6,6 +6,7 @@ import { users } from "../db/schema";
 import { hashPassword, generateId, generateOneTimePassword, generateResetToken } from "../lib/auth";
 import { requireAuth, requireAdmin } from "../middleware/auth";
 import { sendEmail } from "../lib/plunk";
+import { seedWelcomeEmail } from "../lib/welcome-email";
 
 const router = Router();
 router.use(requireAuth, requireAdmin);
@@ -73,6 +74,10 @@ router.post("/", async (req, res) => {
   }
 
   const frontendUrl = process.env.FRONTEND_URL ?? "http://localhost:3000";
+
+  // Seed a welcome email into the inbox so it's waiting when they log in
+  await seedWelcomeEmail({ name: user.name, email: user.email })
+    .catch((err) => console.warn("[welcome] seed failed:", (err as Error).message));
 
   await sendEmail({
     to: recoveryEmail.trim(),

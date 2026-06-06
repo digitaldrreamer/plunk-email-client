@@ -24,6 +24,7 @@ import {
   generateOneTimePassword,
 } from "../src/lib/auth";
 import { sendEmail } from "../src/lib/plunk";
+import { seedWelcomeEmail } from "../src/lib/welcome-email";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -97,6 +98,10 @@ async function main() {
     createdAt: now,
     updatedAt: now,
   }).returning({ id: users.id, name: users.name, email: users.email, role: users.role });
+
+  // ── Seed welcome email into inbox ─────────────────────────────────────────
+  await seedWelcomeEmail({ name: created.name, email: created.email })
+    .catch((err) => console.warn("  ⚠  welcome email seed failed:", (err as Error).message));
 
   // ── Send invite email ─────────────────────────────────────────────────────
   const frontendUrl = process.env.FRONTEND_URL ?? "http://localhost:3000";
