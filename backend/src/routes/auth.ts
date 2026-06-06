@@ -14,6 +14,7 @@ import {
 import { requireAuth } from "../middleware/auth";
 import { rateLimit } from "../lib/rate-limit";
 import { generateTotpSecret, totpQrCodeUrl, verifyTotp } from "../lib/totp";
+import { logger } from "../lib/logger";
 
 // 10 attempts per 15 minutes per IP for login and 2FA
 const loginLimiter = rateLimit(10, 15 * 60_000);
@@ -62,9 +63,11 @@ router.post("/login", loginLimiter, async (req, res) => {
     .where(eq(users.email, email.toLowerCase().trim())).limit(1);
 
   if (!user || !verifyPassword(password, user.passwordHash)) {
+    logger.warn("Login failed: invalid credentials", { action: "login", email: email.toLowerCase().trim(), ip: req.ip });
     return res.status(401).json({ success: false, error: "Invalid credentials" });
   }
   if (user.disabled) {
+    logger.warn("Login failed: account disabled", { action: "login", userId: user.id, userEmail: user.email, ip: req.ip });
     return res.status(403).json({ success: false, error: "Account disabled" });
   }
 
@@ -73,6 +76,7 @@ router.post("/login", loginLimiter, async (req, res) => {
   // 2FA required — return a short-lived temp token (not the session cookie yet)
   if (user.twoFactorEnabled && user.twoFactorSecret) {
     const tempToken = signTwoFactorTemp(user.id);
+    logger.info("Login: 2FA required", { action: "login_2fa_required", userId: user.id, userEmail: user.email, ip: req.ip });
     return res.json({ success: true, requiresTwoFactor: true, tempToken });
   }
 
@@ -84,6 +88,7 @@ router.post("/login", loginLimiter, async (req, res) => {
   });
 
   setAuthCookie(res, token);
+  logger.info("Login successful", { action: "login", userId: user.id, userEmail: user.email, role: user.role, ip: req.ip });
 
   res.json({
     success: true,
@@ -123,10 +128,12 @@ router.post("/2fa/verify", loginLimiter, async (req, res) => {
     const codeHash = crypto.createHash("sha256").update(code.toUpperCase().replace(/\s/g, "")).digest("hex");
     const idx = storedHashes.indexOf(codeHash);
     if (idx === -1) {
+      logger.warn("2FA verify failed: bad code", { action: "2fa_verify", userId, ip: req.ip });
       return res.status(401).json({ success: false, error: "Incorrect code. Try again." });
     }
     storedHashes.splice(idx, 1);
     await db.update(users).set({ twoFactorBackupCodes: JSON.stringify(storedHashes) }).where(eq(users.id, userId));
+    logger.info("2FA verify: backup code used", { action: "2fa_verify_backup", userId, userEmail: user.email });
   }
 
   const token = signToken({
@@ -135,6 +142,7 @@ router.post("/2fa/verify", loginLimiter, async (req, res) => {
   });
 
   setAuthCookie(res, token);
+  logger.info("2FA login successful", { action: "2fa_verify", userId: user.id, userEmail: user.email, ip: req.ip });
 
   res.json({
     success: true,
@@ -275,12 +283,16 @@ router.post("/2fa/setup", requireAuth, async (req, res) => {
     return res.status(400).json({ success: false, error: "2FA is already enabled" });
   }
 
-  const secret = generateTotpSecret();
-  const qrCode = await totpQrCodeUrl(user.email, secret);
-
-  await db.update(users).set({ twoFactorSecret: secret }).where(eq(users.id, req.user!.sub));
-
-  res.json({ success: true, data: { secret, qrCode } });
+  try {
+    const secret = generateTotpSecret();
+    const qrCode = await totpQrCodeUrl(user.email, secret);
+    await db.update(users).set({ twoFactorSecret: secret }).where(eq(users.id, req.user!.sub));
+    logger.info("2FA setup initiated", { action: "2fa_setup", userId: req.user!.sub, userEmail: user.email });
+    res.json({ success: true, data: { secret, qrCode } });
+  } catch (err) {
+    logger.error("2FA setup error", { action: "2fa_setup", userId: req.user!.sub, userEmail: user.email, error: String(err) });
+    res.status(500).json({ success: false, error: "Failed to generate 2FA secret" });
+  }
 });
 
 router.post("/2fa/enable", requireAuth, async (req, res) => {
@@ -297,6 +309,7 @@ router.post("/2fa/enable", requireAuth, async (req, res) => {
     return res.status(400).json({ success: false, error: "2FA already enabled" });
   }
   if (!verifyTotp(code, user.twoFactorSecret)) {
+    logger.warn("2FA enable: bad code", { action: "2fa_enable", userId: req.user!.sub, ip: req.ip });
     return res.status(400).json({ success: false, error: "Incorrect code. Check your authenticator and try again." });
   }
 
@@ -306,6 +319,7 @@ router.post("/2fa/enable", requireAuth, async (req, res) => {
     twoFactorBackupCodes: JSON.stringify(hashed),
   }).where(eq(users.id, req.user!.sub));
 
+  logger.info("2FA enabled", { action: "2fa_enable", userId: req.user!.sub, userEmail: req.user!.email });
   res.json({ success: true, data: { backupCodes: plain } });
 });
 
@@ -316,6 +330,7 @@ router.post("/2fa/disable", requireAuth, async (req, res) => {
   const [user] = await db.select().from(users).where(eq(users.id, req.user!.sub)).limit(1);
   if (!user) return res.status(404).json({ success: false, error: "User not found" });
   if (!verifyPassword(password, user.passwordHash)) {
+    logger.warn("2FA disable: incorrect password", { action: "2fa_disable", userId: req.user!.sub, ip: req.ip });
     return res.status(401).json({ success: false, error: "Incorrect password" });
   }
 
@@ -324,6 +339,7 @@ router.post("/2fa/disable", requireAuth, async (req, res) => {
     twoFactorSecret: null,
   }).where(eq(users.id, req.user!.sub));
 
+  logger.info("2FA disabled", { action: "2fa_disable", userId: req.user!.sub, userEmail: req.user!.email });
   res.json({ success: true });
 });
 

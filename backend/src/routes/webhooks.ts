@@ -3,6 +3,7 @@ import crypto from "crypto";
 import { eq } from "drizzle-orm";
 import { db } from "../db";
 import { tags } from "../db/schema";
+import { logger } from "../lib/logger";
 import { addEmail, updateEmailByPlunkId, getEmailByPlunkId, type StoredEmail } from "../lib/store";
 import { sseEmit } from "../lib/sse";
 import { isHardFail, postmarkSpamScore, isSpam, type Verdict } from "../lib/spam";
@@ -44,18 +45,18 @@ router.post("/inbound", async (req, res) => {
     }
 
     if (isHardFail(event.spamVerdict as Verdict)) {
-      console.log(`[inbound] dropped spam: ${event.messageId}`);
+      logger.warn("Inbound: dropped spam verdict", { action: "inbound_drop", reason: "spam_verdict", messageId: event.messageId });
       return res.status(200).json({ status: "dropped: spam verdict" });
     }
     if (isHardFail(event.virusVerdict as Verdict)) {
-      console.log(`[inbound] dropped virus: ${event.messageId}`);
+      logger.warn("Inbound: dropped virus verdict", { action: "inbound_drop", reason: "virus_verdict", messageId: event.messageId });
       return res.status(200).json({ status: "dropped: virus verdict" });
     }
 
     const rawForSpam = `From: ${event.fromHeader ?? event.from}\nSubject: ${event.subject}\n\n${event.body ?? ""}`;
     const score = await postmarkSpamScore(rawForSpam);
     if (isSpam(score)) {
-      console.log(`[inbound] dropped spam score ${score}: ${event.messageId}`);
+      logger.warn("Inbound: dropped by spam score", { action: "inbound_drop", reason: "spam_score", score, messageId: event.messageId });
       return res.status(200).json({ status: "dropped: spam score", score });
     }
 
@@ -83,7 +84,7 @@ router.post("/inbound", async (req, res) => {
           if (!tagIds.includes(id)) tagIds.push(id);
         }
       } catch (err) {
-        console.warn("[inbound] categorization failed:", (err as Error).message);
+        logger.warn("Inbound: AI categorization failed", { action: "inbound_categorize", error: (err as Error).message });
       }
     }
 
@@ -113,7 +114,7 @@ router.post("/inbound", async (req, res) => {
 
     await addEmail(email);
     sseEmit("new-email", email);
-    console.log(`[inbound] stored ${emailId} from ${event.from} (${category})`);
+    logger.info("Inbound: email stored", { action: "inbound_stored", emailId, from: event.from, subject: event.subject, category, folder });
 
     // Ack immediately — heavy work runs after
     res.status(200).json({ status: "ok", id: emailId });
@@ -122,7 +123,7 @@ router.post("/inbound", async (req, res) => {
       try {
         await upsertContact(event.from.toLowerCase(), senderName);
       } catch (err) {
-        console.warn("[inbound] contact upsert failed:", (err as Error).message);
+        logger.warn("Inbound: contact upsert failed", { action: "inbound_contact", error: (err as Error).message });
       }
       try {
         const threats = await checkUrlSafety(email.body);
@@ -130,14 +131,14 @@ router.post("/inbound", async (req, res) => {
           const threatUrlList = threats.map((t) => t.url);
           await updateEmailByPlunkId(emailId, { category: "dangerous", threatUrls: threatUrlList });
           sseEmit("email-updated", { id: emailId, category: "dangerous", threatUrls: threatUrlList });
-          console.log(`[inbound] dangerous URLs in ${emailId}: ${threatUrlList.join(", ")}`);
+          logger.warn("Inbound: dangerous URLs detected", { action: "inbound_threat", emailId, urls: threatUrlList });
         }
       } catch (err) {
-        console.warn("[inbound] URL safety check failed:", (err as Error).message);
+        logger.warn("Inbound: URL safety check failed", { action: "inbound_threat", error: (err as Error).message });
       }
     });
   } catch (err) {
-    console.error("[inbound]", err);
+    logger.error("Inbound: unhandled error", { action: "inbound_error", error: String(err) });
     res.status(200).json({ status: "error" });
   }
 });
@@ -179,14 +180,14 @@ async function eventsHandler(req: Request, res: Response): Promise<void> {
 
     // ── email.sent ─────────────────────────────────────────────────────────
     if ("sentAt" in event) {
-      console.log(`[event] sent → ${contactEmail} emailId=${emailId}`);
+      logger.info("Event: email sent", { action: "event_sent", contactEmail, emailId });
       if (emailId) await updateEmailByPlunkId(emailId, { deliveryStatus: "sent" });
       return;
     }
 
     // ── email.delivery ─────────────────────────────────────────────────────
     if ("deliveredAt" in event) {
-      console.log(`[event] delivered → ${contactEmail} emailId=${emailId}`);
+      logger.info("Event: email delivered", { action: "event_delivered", contactEmail, emailId });
       if (emailId) {
         await updateEmailByPlunkId(emailId, {
           deliveryStatus: "delivered",
@@ -200,7 +201,7 @@ async function eventsHandler(req: Request, res: Response): Promise<void> {
     if ("openedAt" in event) {
       const opens = typeof event.opens === "number" ? event.opens : 1;
       const isFirst = event.isFirstOpen === true;
-      console.log(`[event] open #${opens} → ${contactEmail} emailId=${emailId}`);
+      logger.info("Event: email opened", { action: "event_open", contactEmail, emailId, opens, isFirst: event.isFirstOpen });
       if (emailId) {
         await updateEmailByPlunkId(emailId, {
           deliveryStatus: "opened",
@@ -215,7 +216,7 @@ async function eventsHandler(req: Request, res: Response): Promise<void> {
     if ("clickedAt" in event) {
       const clicks = typeof event.clicks === "number" ? event.clicks : 1;
       const isFirst = event.isFirstClick === true;
-      console.log(`[event] click #${clicks} → ${contactEmail} link=${event.link ?? ""}`);
+      logger.info("Event: link clicked", { action: "event_click", contactEmail, emailId, clicks, link: event.link });
       if (emailId) {
         await updateEmailByPlunkId(emailId, {
           deliveryStatus: "clicked",
@@ -229,7 +230,7 @@ async function eventsHandler(req: Request, res: Response): Promise<void> {
     // ── email.bounce ───────────────────────────────────────────────────────
     if ("bounceType" in event) {
       const isPermanent = event.bounceType === "Permanent";
-      console.log(`[event] bounce (${isPermanent ? "hard" : "soft"}) → ${contactEmail}`);
+      logger.warn("Event: email bounced", { action: "event_bounce", contactEmail, emailId, permanent: isPermanent });
 
       if (isPermanent) {
         if (emailId) {
@@ -245,7 +246,7 @@ async function eventsHandler(req: Request, res: Response): Promise<void> {
         // Notify system that the email bounced
         const subject = event.subject ? String(event.subject) : "(unknown subject)";
         await sendBounceNotification(contactEmail, subject).catch((err) =>
-          console.warn("[event] bounce notification failed:", (err as Error).message)
+          logger.warn("Event: bounce notification failed", { action: "event_bounce_notify", error: (err as Error).message })
         );
       }
       // Soft bounces: just log — no status change, contact stays subscribed
@@ -254,7 +255,7 @@ async function eventsHandler(req: Request, res: Response): Promise<void> {
 
     // ── email.complaint ────────────────────────────────────────────────────
     if ("complainedAt" in event) {
-      console.log(`[event] complaint → ${contactEmail}`);
+      logger.warn("Event: spam complaint", { action: "event_complaint", contactEmail, emailId });
       if (emailId) {
         await updateEmailByPlunkId(emailId, { deliveryStatus: "complained" });
       }
@@ -264,9 +265,9 @@ async function eventsHandler(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    console.log("[event] unrecognised payload:", JSON.stringify(event).slice(0, 200));
+    logger.warn("Event: unrecognised payload", { action: "event_unknown", payload: JSON.stringify(event).slice(0, 200) });
   } catch (err) {
-    console.error("[events]", err);
+    logger.error("Event: unhandled error", { action: "event_error", error: String(err) });
   }
 }
 

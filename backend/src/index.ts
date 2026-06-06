@@ -11,6 +11,7 @@ import authRouter from "./routes/auth";
 import usersRouter from "./routes/users";
 import aiRouter from "./routes/ai";
 import contactsRouter from "./routes/contacts";
+import { requestLogger } from "./lib/logger";
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -32,6 +33,7 @@ app.use(cors({
 app.use(cookieParser());
 app.use(express.json({ limit: "512kb" }));
 app.use(express.urlencoded({ extended: true }));
+app.use(requestLogger);
 
 app.get("/health", (_req, res) => res.json({ status: "ok" }));
 app.use("/api/auth", authRouter);

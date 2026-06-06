@@ -13,7 +13,8 @@ import {
   type StoredEmail,
 } from "../lib/store";
 import { requireAuth } from "../middleware/auth";
-import { addSseClient, removeSseClient } from "../lib/sse";
+import { addSseClient, removeSseClient, sseEmit } from "../lib/sse";
+import { logger } from "../lib/logger";
 
 const router = Router();
 router.use(requireAuth);
@@ -185,27 +186,32 @@ router.post(
         mimeType: f.mimetype,
       }));
 
+      const senderEmail = req.user!.email;
+      const senderName = senderEmail.split("@")[0];
+
       const result = await sendEmail({
         to,
         subject,
         body: htmlBody,
-        ...(from && { from }),
-        ...(reply && { reply }),
+        // Use Plunk-verified sender address but surface the user's name in the display name
+        from: from ?? { name: senderName, email: process.env.PLUNK_FROM_EMAIL ?? "noreply@team.reclear.io" },
+        // Reply-to = the user's actual team inbox so replies land in their inbox
+        reply: reply ?? senderEmail,
         ...(attachments.length && { attachments }),
       });
 
       if (!result.success) {
+        logger.error("Email send failed", { action: "email_send", userEmail: senderEmail, to, subject, error: result.error });
         return res.status(502).json({ success: false, error: result.error });
       }
 
-      // Log the sent email in the store
       const plunkEmailId = result.data?.emails[0]?.email;
       const emailId = `sent-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
       const sentEmail: StoredEmail = {
         id: emailId,
         messageId: emailId,
         threadId: `t-sent-${Date.now()}`,
-        from: { name: "Me", email: process.env.PLUNK_FROM_EMAIL ?? "me@team.reclear.io" },
+        from: { name: senderName, email: senderEmail },
         to: to.map((addr) => ({ name: addr, email: addr })),
         subject,
         body: htmlBody,
@@ -224,6 +230,9 @@ router.post(
         clickCount: 0,
       };
       await addEmail(sentEmail);
+      sseEmit("new-email", sentEmail);
+
+      logger.info("Email sent", { action: "email_send", userId: req.user!.sub, userEmail: senderEmail, to, subject, plunkEmailId, emailId });
 
       // Upsert each recipient as a contact (async, don't block response)
       setImmediate(() => {
@@ -234,7 +243,7 @@ router.post(
 
       res.json({ success: true, data: result.data });
     } catch (err) {
-      console.error("[send]", err);
+      logger.error("Email send error", { action: "email_send", userEmail: req.user?.email, error: String(err) });
       res.status(500).json({ success: false, error: "Internal server error" });
     }
   }
