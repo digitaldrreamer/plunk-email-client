@@ -10,7 +10,7 @@ import { seedWelcomeEmail } from "../lib/welcome-email";
 import { normaliseTeamEmail, isValidEmail } from "../lib/email-address";
 
 const router = Router();
-router.use(requireAuth, requireAdmin);
+router.use(requireAuth);
 
 const SAFE_COLS = {
   id: users.id,
@@ -26,14 +26,21 @@ const SAFE_COLS = {
   twoFactorEnabled: users.twoFactorEnabled,
 };
 
-// GET /api/users
-router.get("/", async (_req, res) => {
+// GET /api/users — any authenticated user can view the directory
+router.get("/", async (req, res) => {
   const all = await db.select(SAFE_COLS).from(users);
+  // Members only see public directory fields — no recovery email, no internal flags
+  if (req.user?.role !== "admin") {
+    const directory = all.map(({ name, email, role, twoFactorEnabled }) => ({
+      name, email, role, twoFactorEnabled,
+    }));
+    return res.json({ success: true, data: directory });
+  }
   res.json({ success: true, data: all });
 });
 
 // POST /api/users — invite user (no password field; sends invite to recovery email)
-router.post("/", async (req, res) => {
+router.post("/", requireAdmin, async (req, res) => {
   const { name, email, recoveryEmail, role } = req.body as {
     name?: string; email?: string; recoveryEmail?: string; role?: string;
   };
@@ -117,7 +124,7 @@ router.post("/", async (req, res) => {
 });
 
 // PATCH /api/users/:id — update name, recoveryEmail, role, disabled
-router.patch("/:id", async (req, res) => {
+router.patch("/:id", requireAdmin, async (req, res) => {
   const { name, recoveryEmail, role, disabled } = req.body as {
     name?: string; recoveryEmail?: string; role?: string; disabled?: boolean;
   };
@@ -148,7 +155,7 @@ router.patch("/:id", async (req, res) => {
 });
 
 // POST /api/users/:id/send-reset — sends a password reset link to recovery email
-router.post("/:id/send-reset", async (req, res) => {
+router.post("/:id/send-reset", requireAdmin, async (req, res) => {
   const [user] = await db.select().from(users).where(eq(users.id, req.params.id)).limit(1);
   if (!user) return res.status(404).json({ success: false, error: "User not found" });
   if (!user.recoveryEmail) {
@@ -184,7 +191,7 @@ router.post("/:id/send-reset", async (req, res) => {
 });
 
 // DELETE /api/users/:id
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", requireAdmin, async (req, res) => {
   const [target] = await db.select({ role: users.role }).from(users)
     .where(eq(users.id, req.params.id)).limit(1);
   if (!target) return res.status(404).json({ success: false, error: "User not found" });
