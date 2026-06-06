@@ -15,8 +15,18 @@ import contactsRouter from "./routes/contacts";
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+const allowedOrigins = [
+  "https://mail.reclear.io",
+  "http://localhost:3000",
+  process.env.FRONTEND_URL,
+].filter(Boolean) as string[];
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL ?? "http://localhost:3000",
+  origin: (origin, cb) => {
+    // Allow requests with no origin (health checks, server-to-server calls)
+    if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+    cb(new Error(`CORS: origin ${origin} not allowed`));
+  },
   credentials: true,
 }));
 app.use(cookieParser());

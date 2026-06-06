@@ -16,33 +16,28 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(request.url);
 
-  // Cache-first for immutable Next.js static chunks
+  // Don't intercept cross-origin requests — let the browser handle API calls
+  // natively so cookies, CORS, and SSE all work without interference.
+  if (url.origin !== self.location.origin) return;
+
+  // Cache-first for immutable Next.js static chunks (content-hashed filenames)
   if (url.pathname.startsWith('/_next/static/')) {
     event.respondWith(
-      caches.match(request).then(cached =>
-        cached || fetch(request).then(res => {
-          if (res.ok) caches.open(CACHE).then(c => c.put(request, res.clone()));
+      caches.match(request).then(cached => {
+        if (cached) return cached;
+        return fetch(request).then(res => {
+          if (res.ok) {
+            const clone = res.clone(); // clone before any async work
+            caches.open(CACHE).then(c => c.put(request, clone));
+          }
           return res;
-        })
-      )
+        });
+      })
     );
     return;
   }
 
-  // Network-first for API calls, fall back to cached response
-  if (url.pathname.startsWith('/api/')) {
-    event.respondWith(
-      fetch(request)
-        .then(res => {
-          if (res.ok) caches.open(CACHE).then(c => c.put(request, res.clone()));
-          return res;
-        })
-        .catch(() => caches.match(request))
-    );
-    return;
-  }
-
-  // Network-first for navigation, fall back to cached root shell
+  // Network-first for navigation — offline fallback to cached root shell
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request).catch(() =>
@@ -54,12 +49,13 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Network with cache fallback for everything else
+  // Network with cache fallback for all other same-origin requests
   event.respondWith(
     fetch(request)
       .then(res => {
-        if (res.ok && url.origin === self.location.origin) {
-          caches.open(CACHE).then(c => c.put(request, res.clone()));
+        if (res.ok) {
+          const clone = res.clone(); // clone before any async work
+          caches.open(CACHE).then(c => c.put(request, clone));
         }
         return res;
       })
