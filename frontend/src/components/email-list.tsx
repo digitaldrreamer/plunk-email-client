@@ -196,6 +196,7 @@ export function EmailList() {
 
   const [warnedIds, setWarnedIds] = useState<Set<string>>(new Set());
   const [pendingDangerThread, setPendingDangerThread] = useState<Thread | null>(null);
+  const [pendingTrashThread, setPendingTrashThread] = useState<Thread | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -244,8 +245,7 @@ export function EmailList() {
 
   const handleTrash = (e: React.MouseEvent, thread: Thread) => {
     e.stopPropagation();
-    moveThread(thread.id, "trash");
-    toast("Moved to trash", { duration: 2000 });
+    setPendingTrashThread(thread);
   };
 
   const handleThreadClick = (thread: Thread) => {
@@ -650,6 +650,27 @@ export function EmailList() {
             >
               Open anyway
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!pendingTrashThread} onOpenChange={(open) => !open && setPendingTrashThread(null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Move to trash?</DialogTitle>
+            <DialogDescription>
+              &ldquo;{pendingTrashThread?.subject}&rdquo; will be moved to trash.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" size="sm" onClick={() => setPendingTrashThread(null)}>Cancel</Button>
+            <Button variant="destructive" size="sm" onClick={() => {
+              if (pendingTrashThread) {
+                moveThread(pendingTrashThread.id, "trash");
+                toast("Moved to trash", { duration: 2000 });
+              }
+              setPendingTrashThread(null);
+            }}>Move to trash</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

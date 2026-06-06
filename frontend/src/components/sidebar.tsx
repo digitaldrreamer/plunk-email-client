@@ -216,7 +216,9 @@ export function Sidebar({ onOpenSettings, onOpenContacts }: { onOpenSettings?: (
         </ScrollArea>
 
         {/* Footer */}
-        <div className="shrink-0 border-t border-sidebar-border p-3">
+        <div className="shrink-0 border-t border-sidebar-border pt-2">
+          <InstallButton variant="card" />
+          <div className="px-3 pb-3">
           <div className="flex items-center gap-2.5">
             <div className="flex size-7 items-center justify-center rounded-full bg-muted text-xs font-semibold uppercase shrink-0">
               {user?.name?.slice(0, 2) ?? "me"}
@@ -226,7 +228,6 @@ export function Sidebar({ onOpenSettings, onOpenContacts }: { onOpenSettings?: (
               <p className="text-[11px] text-muted-foreground truncate">{user?.email ?? "me@team.reclear.io"}</p>
             </div>
             <div className="flex items-center gap-0.5 shrink-0">
-              <InstallButton iconOnly />
               {user?.role === "admin" && (
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -254,6 +255,7 @@ export function Sidebar({ onOpenSettings, onOpenContacts }: { onOpenSettings?: (
                 <TooltipContent side="top">Sign out</TooltipContent>
               </Tooltip>
             </div>
+          </div>
           </div>
         </div>
       </div>

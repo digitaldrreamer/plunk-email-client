@@ -20,14 +20,15 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 }
 
-export function InstallButton({ iconOnly = false }: { iconOnly?: boolean }) {
+type InstallVariant = "icon" | "button" | "card" | "row";
+
+export function InstallButton({ variant = "icon" }: { variant?: InstallVariant; /** @deprecated */ iconOnly?: boolean }) {
   const [prompt, setPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [installed, setInstalled] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
   const [isIos, setIsIos] = useState(false);
 
   useEffect(() => {
-    // Already running as installed PWA
     if (window.matchMedia("(display-mode: standalone)").matches) {
       setInstalled(true);
       return;
@@ -61,31 +62,68 @@ export function InstallButton({ iconOnly = false }: { iconOnly?: boolean }) {
         setInstalled(true);
       }
     } else {
-      // No native prompt — show manual instructions
       setGuideOpen(true);
     }
   };
 
-  const btn = iconOnly ? (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          className="text-muted-foreground hover:text-foreground"
-          onClick={handleClick}
-        >
-          <DownloadIcon className="size-3.5" />
+  let btn: React.ReactNode;
+
+  if (variant === "icon") {
+    btn = (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="text-muted-foreground hover:text-foreground"
+            onClick={handleClick}
+          >
+            <DownloadIcon className="size-3.5" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="top">Install app</TooltipContent>
+      </Tooltip>
+    );
+  } else if (variant === "button") {
+    btn = (
+      <Button variant="outline" size="sm" className="gap-1.5 text-xs h-7" onClick={handleClick}>
+        <DownloadIcon className="size-3.5" />
+        Install app
+      </Button>
+    );
+  } else if (variant === "card") {
+    btn = (
+      <div className="mx-3 mb-2 rounded-lg border border-border bg-muted/40 px-3 py-2.5 flex items-center gap-3">
+        <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10">
+          <SmartphoneIcon className="size-4 text-primary" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-medium text-foreground">Install Reclear</p>
+          <p className="text-[11px] text-muted-foreground leading-tight">Add to your device for quick access</p>
+        </div>
+        <Button size="sm" variant="outline" className="h-7 text-xs shrink-0" onClick={handleClick}>
+          Install
         </Button>
-      </TooltipTrigger>
-      <TooltipContent side="top">Install app</TooltipContent>
-    </Tooltip>
-  ) : (
-    <Button variant="outline" size="sm" className="gap-1.5 text-xs h-7" onClick={handleClick}>
-      <DownloadIcon className="size-3.5" />
-      Install app
-    </Button>
-  );
+      </div>
+    );
+  } else {
+    // row — full-width row for mobile bottom sheet
+    btn = (
+      <button
+        onClick={handleClick}
+        className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium hover:bg-accent transition-colors"
+      >
+        <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10">
+          <SmartphoneIcon className="size-4 text-primary" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium">Install app</p>
+          <p className="text-xs text-muted-foreground">Add Reclear to your home screen</p>
+        </div>
+        <DownloadIcon className="size-4 text-muted-foreground shrink-0" />
+      </button>
+    );
+  }
 
   return (
     <>
@@ -96,7 +134,7 @@ export function InstallButton({ iconOnly = false }: { iconOnly?: boolean }) {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <SmartphoneIcon className="size-4" />
-              Install reclear
+              Install Reclear
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3 text-sm text-muted-foreground pt-1">
@@ -114,11 +152,11 @@ export function InstallButton({ iconOnly = false }: { iconOnly?: boolean }) {
                 <p>On <strong className="text-foreground">Chrome / Edge</strong>:</p>
                 <ol className="list-decimal pl-4 space-y-1.5">
                   <li>Click the <strong className="text-foreground">⋮</strong> menu in the top-right.</li>
-                  <li>Click <strong className="text-foreground">Install reclear…</strong> or <strong className="text-foreground">Add to Home screen</strong>.</li>
+                  <li>Click <strong className="text-foreground">Install Reclear…</strong> or <strong className="text-foreground">Add to Home screen</strong>.</li>
                   <li>Confirm in the dialog.</li>
                 </ol>
                 <p className="text-xs">
-                  If you don't see that option, the app may need to be served over HTTPS first.
+                  If you don&apos;t see that option, the app may need to be served over HTTPS first.
                 </p>
               </>
             )}

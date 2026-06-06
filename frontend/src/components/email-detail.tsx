@@ -345,6 +345,7 @@ export function EmailDetail() {
   const [replySending, setReplySending] = useState(false);
   const [replyError, setReplyError] = useState("");
   const [replyThreatWarning, setReplyThreatWarning] = useState<{ threats: { url: string; threatTypes: string[] }[] } | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const replyEditorRef = useRef<EmailEditorRef>(null);
   const replyInitialHtml = useMemo(
@@ -445,12 +446,27 @@ export function EmailDetail() {
 
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon-sm" onClick={() => deleteThread(thread.id)}>
+                <Button variant="ghost" size="icon-sm" onClick={() => setConfirmDelete(true)}>
                   <Trash2Icon className="size-4 text-muted-foreground" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Delete</TooltipContent>
             </Tooltip>
+
+            <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+              <DialogContent className="sm:max-w-sm">
+                <DialogHeader>
+                  <DialogTitle>Delete conversation?</DialogTitle>
+                  <DialogDescription>
+                    This will permanently delete all {thread.emails.length} message{thread.emails.length !== 1 ? "s" : ""} in this thread. This cannot be undone.
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter className="gap-2 sm:gap-0">
+                  <Button variant="outline" size="sm" onClick={() => setConfirmDelete(false)}>Cancel</Button>
+                  <Button variant="destructive" size="sm" onClick={() => { setConfirmDelete(false); deleteThread(thread.id); }}>Delete</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
 
             <Tooltip>
               <TooltipTrigger asChild>

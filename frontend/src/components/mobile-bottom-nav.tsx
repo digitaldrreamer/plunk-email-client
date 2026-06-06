@@ -290,6 +290,12 @@ export function MobileBottomNav() {
                 </div>
               </div>
 
+              {/* Install app */}
+              <Separator />
+              <div className="px-2 py-1">
+                <InstallButton variant="row" />
+              </div>
+
               {/* User info + actions */}
               <Separator />
               <div className="flex items-center gap-3 px-2 py-1">
@@ -301,7 +307,6 @@ export function MobileBottomNav() {
                   <p className="text-xs text-muted-foreground truncate">{user?.email ?? "me@team.reclear.io"}</p>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
-                  <InstallButton iconOnly />
                   {user?.role === "admin" && (
                     <Button
                       variant="ghost"
