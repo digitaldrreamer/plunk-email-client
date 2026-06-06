@@ -1,81 +1,92 @@
 "use client";
 
-import React, { useState } from "react";
-import { MenuIcon, XIcon } from "lucide-react";
+import React from "react";
+import { ChevronLeftIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Sidebar } from "@/components/sidebar";
+import { IconSidebar } from "@/components/icon-sidebar";
 import { EmailList } from "@/components/email-list";
 import { EmailDetail } from "@/components/email-detail";
 import { ComposeModal } from "@/components/compose-modal";
+import { MobileBottomNav } from "@/components/mobile-bottom-nav";
 import { Button } from "@/components/ui/button";
 import { useEmailStore } from "@/store/email-store";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 
 export function EmailClient() {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { selectedEmailId, selectEmail } = useEmailStore();
+  const { selectedThreadId, selectThread } = useEmailStore();
+  useDocumentTitle();
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-background">
-      {/* Desktop sidebar */}
-      <div className="hidden md:flex w-60 shrink-0 flex-col">
+    <div className="flex h-[100dvh] w-full overflow-hidden bg-background" suppressHydrationWarning>
+
+      {/* ── Tablet: icon-only sidebar (md, hidden on mobile + lg) ── */}
+      <div className="hidden md:flex lg:hidden shrink-0">
+        <IconSidebar />
+      </div>
+
+      {/* ── Desktop: full sidebar (lg+) ── */}
+      <div className="hidden lg:flex w-60 shrink-0 flex-col">
         <Sidebar />
       </div>
 
-      {/* Mobile sidebar overlay */}
-      {sidebarOpen && (
-        <div className="fixed inset-0 z-40 flex md:hidden">
-          <div
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-            onClick={() => setSidebarOpen(false)}
-          />
-          <div className="relative z-10 w-72 shrink-0 flex flex-col shadow-xl">
-            <Sidebar onClose={() => setSidebarOpen(false)} />
-          </div>
-        </div>
-      )}
-
-      {/* Email list — hidden on mobile when email is open */}
+      {/* ── Email list panel ── */}
       <div
         className={cn(
-          "flex shrink-0 flex-col",
-          "w-full md:w-80 lg:w-96",
-          selectedEmailId ? "hidden md:flex" : "flex"
+          "flex shrink-0 flex-col min-h-0",
+          // Mobile: full-width, hidden when reading a thread
+          "w-full md:w-80 lg:w-[340px] xl:w-96",
+          selectedThreadId ? "hidden md:flex" : "flex"
         )}
       >
-        {/* Mobile top bar */}
-        <div className="flex items-center gap-2 border-b border-border px-3 py-2 md:hidden bg-background">
-          <Button variant="ghost" size="icon-sm" onClick={() => setSidebarOpen(true)}>
-            <MenuIcon className="size-5" />
-          </Button>
-          <span className="text-sm font-semibold text-foreground">reclear</span>
+        {/* Mobile top bar (no sidebar on mobile) */}
+        <div className="flex items-center justify-between border-b border-border px-4 h-14 md:hidden bg-sidebar shrink-0">
+          <div className="flex items-center gap-2">
+            <div className="flex size-6 items-center justify-center rounded-md bg-primary">
+              <span className="text-[10px] font-bold text-primary-foreground">R</span>
+            </div>
+            <span className="text-sm font-semibold tracking-tight">reclear</span>
+          </div>
         </div>
-        <div className="flex-1 min-h-0">
+
+        {/* List — takes remaining height, mobile: subtract bottom nav */}
+        <div className="flex-1 min-h-0 overflow-hidden pb-16 md:pb-0">
           <EmailList />
         </div>
       </div>
 
-      {/* Email detail — full screen on mobile when email is open */}
+      {/* ── Email detail panel ── */}
       <div
         className={cn(
-          "flex flex-col flex-1 min-w-0",
-          selectedEmailId ? "flex" : "hidden md:flex"
+          "flex flex-col flex-1 min-w-0 min-h-0",
+          selectedThreadId ? "flex" : "hidden md:flex"
         )}
       >
-        {/* Mobile back button */}
-        {selectedEmailId && (
-          <div className="flex items-center gap-2 border-b border-border px-3 py-2 md:hidden bg-background shrink-0">
-            <Button variant="ghost" size="icon-sm" onClick={() => selectEmail(null)}>
-              <XIcon className="size-4" />
+        {/* Mobile back bar */}
+        {selectedThreadId && (
+          <div className="flex items-center gap-1 border-b border-border px-2 h-14 md:hidden bg-sidebar shrink-0">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1 text-muted-foreground hover:text-foreground px-2"
+              onClick={() => selectThread(null)}
+            >
+              <ChevronLeftIcon className="size-4" />
+              <span className="text-sm">Back</span>
             </Button>
-            <span className="text-xs text-muted-foreground">Back to list</span>
           </div>
         )}
-        <div className="flex-1 min-h-0">
+
+        {/* Detail — mobile: subtract bottom nav */}
+        <div className="flex-1 min-h-0 overflow-hidden pb-16 md:pb-0">
           <EmailDetail />
         </div>
       </div>
 
-      {/* Compose floating window */}
+      {/* ── Mobile sticky bottom nav ── */}
+      <MobileBottomNav />
+
+      {/* ── Compose floating window ── */}
       <ComposeModal />
     </div>
   );

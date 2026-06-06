@@ -1,5 +1,5 @@
 export type Folder = "inbox" | "sent" | "drafts" | "archive" | "spam" | "trash";
-export type Category = "primary" | "internal" | "notifications" | "newsletter";
+export type Category = "primary" | "internal" | "notifications" | "newsletter" | "dangerous";
 
 export interface Contact {
   name: string;
@@ -17,6 +17,7 @@ export interface Attachment {
 
 export interface Email {
   id: string;
+  threadId: string; // groups emails into a conversation
   from: Contact;
   to: Contact[];
   subject: string;
@@ -29,8 +30,18 @@ export interface Email {
   category: Category;
   tagIds: string[];
   attachments?: Attachment[];
-  threadCount?: number;
+  threatUrls?: string[];
+  // Delivery tracking — populated for outbound emails only
+  deliveryStatus?: string;
+  openCount?: number;
+  clickCount?: number;
+  deliveredAt?: string;
+  firstOpenedAt?: string;
+  firstClickedAt?: string;
+  bouncedAt?: string;
 }
+
+export const ME: Contact = { name: "Me", email: "me@reclear.io" };
 
 const now = new Date();
 const d = (offsetDays: number, hours = 10, mins = 0) => {
@@ -41,13 +52,14 @@ const d = (offsetDays: number, hours = 10, mins = 0) => {
 };
 
 export const EMAILS: Email[] = [
-  // ── Inbox / Primary ─────────────────────────────────
+  // ── Thread: t-budget (3 messages) ───────────────────
   {
     id: "e1",
+    threadId: "t-budget",
     from: { name: "Sarah Chen", email: "sarah.chen@acme.com", verified: true },
-    to: [{ name: "Me", email: "me@reclear.io" }],
+    to: [ME],
     subject: "Q4 Budget Review — numbers look tight",
-    preview: "Hey, I went through the spreadsheet you sent and a few line items need discussion before we sign off on this quarter.",
+    preview: "Hey, I went through the spreadsheet you sent and a few line items need discussion before we sign off.",
     body: `Hey,
 
 I went through the spreadsheet you sent over and a few line items need discussion before we sign off on this quarter.
@@ -63,12 +75,56 @@ Does Thursday 2pm work for you? I'll create the invite once you confirm.
     folder: "inbox",
     category: "primary",
     tagIds: ["work", "finance"],
-    threadCount: 3,
   },
   {
+    id: "e1b",
+    threadId: "t-budget",
+    from: ME,
+    to: [{ name: "Sarah Chen", email: "sarah.chen@acme.com" }],
+    subject: "Re: Q4 Budget Review — numbers look tight",
+    preview: "Thursday 2pm works great. I'll prepare a summary of the over-spend line items beforehand.",
+    body: `Hi Sarah,
+
+Thursday 2pm works great. I'll prepare a summary of the over-spend line items beforehand so we can move quickly.
+
+Talk soon,
+Me`,
+    date: d(0, 9, 45),
+    read: true,
+    starred: false,
+    folder: "sent",
+    category: "primary",
+    tagIds: ["work", "finance"],
+  },
+  {
+    id: "e1c",
+    threadId: "t-budget",
+    from: { name: "Sarah Chen", email: "sarah.chen@acme.com", verified: true },
+    to: [ME],
+    subject: "Re: Q4 Budget Review — numbers look tight",
+    preview: "Perfect, Thursday 2pm confirmed. I'll also pull together the marketing variance report beforehand.",
+    body: `Great, confirmed for Thursday 2pm.
+
+I'll also pull together the marketing variance report so we have everything in one place. I think once we see the full picture it'll be easier to agree on where to adjust.
+
+Also — do you want to loop in finance? Their sign-off will be needed if we're moving budget between departments.
+
+See you Thursday,
+Sarah`,
+    date: d(0, 14, 30),
+    read: false,
+    starred: false,
+    folder: "inbox",
+    category: "primary",
+    tagIds: ["work", "finance"],
+  },
+
+  // ── Thread: t-brand (2 messages) ────────────────────
+  {
     id: "e2",
+    threadId: "t-brand",
     from: { name: "Marcus Webb", email: "marcus@webb.design" },
-    to: [{ name: "Me", email: "me@reclear.io" }],
+    to: [ME],
     subject: "Brand refresh — final assets attached",
     preview: "All the files are exported and ready. Let me know if you need different formats.",
     body: `Hi,
@@ -96,9 +152,33 @@ Marcus`,
     ],
   },
   {
+    id: "e2b",
+    threadId: "t-brand",
+    from: ME,
+    to: [{ name: "Marcus Webb", email: "marcus@webb.design" }],
+    subject: "Re: Brand refresh — final assets attached",
+    preview: "These look great! The indigo accent is a big improvement. Sharing with the team today.",
+    body: `Hey Marcus,
+
+These look great! The indigo accent is a big improvement over the old blue — much more distinct. Wordmark change is subtle but you can feel it at small sizes.
+
+I'll share the asset pack with the team today and come back if anyone has questions. Should be good to go.
+
+Thanks!`,
+    date: d(1, 17, 10),
+    read: true,
+    starred: false,
+    folder: "sent",
+    category: "primary",
+    tagIds: ["design", "work"],
+  },
+
+  // ── Thread: t-nda (single) ───────────────────────────
+  {
     id: "e3",
+    threadId: "t-nda",
     from: { name: "Priya Nair", email: "priya.nair@legalteam.io", verified: true },
-    to: [{ name: "Me", email: "me@reclear.io" }],
+    to: [ME],
     subject: "NDA — please review and sign by Friday",
     preview: "Attached is the updated NDA. We've incorporated all the changes discussed last week.",
     body: `Hi,
@@ -121,10 +201,13 @@ Priya`,
       { id: "a3", name: "NDA-v3-final.pdf", size: "256 KB", type: "application/pdf" },
     ],
   },
+
+  // ── Thread: t-trip (3 messages) ─────────────────────
   {
     id: "e4",
+    threadId: "t-trip",
     from: { name: "Tomás Rivera", email: "tomas@product.co" },
-    to: [{ name: "Me", email: "me@reclear.io" }],
+    to: [ME],
     subject: "Weekend trip — confirming dates",
     preview: "I've booked the cabin for the 15th–17th. Are you still able to make it?",
     body: `Hey!
@@ -145,9 +228,53 @@ Tomás`,
     tagIds: ["personal", "travel"],
   },
   {
+    id: "e4b",
+    threadId: "t-trip",
+    from: ME,
+    to: [{ name: "Tomás Rivera", email: "tomas@product.co" }],
+    subject: "Re: Weekend trip — confirming dates",
+    preview: "Confirmed! I'll drive myself — see you at the cabin around noon.",
+    body: `Hey Tomás!
+
+Confirmed. I'll drive separately so I have flexibility on the return. Should be there around noon on Friday.
+
+Payment sent via the link — let me know if you got it.
+
+See you then!`,
+    date: d(3, 19, 10),
+    read: true,
+    starred: false,
+    folder: "sent",
+    category: "primary",
+    tagIds: ["personal", "travel"],
+  },
+  {
+    id: "e4c",
+    threadId: "t-trip",
+    from: { name: "Tomás Rivera", email: "tomas@product.co" },
+    to: [ME],
+    subject: "Re: Weekend trip — confirming dates",
+    preview: "Got the payment, thanks! I'll add you to the group chat now.",
+    body: `Got it, payment received — thanks!
+
+Adding you to the group chat now. The packing list is there. Main things to bring: sleeping bag (the cabin has blankets but they're thin), good boots for trails, and something warm for the evenings.
+
+Can't wait!
+Tomás`,
+    date: d(2, 9, 0),
+    read: true,
+    starred: false,
+    folder: "inbox",
+    category: "primary",
+    tagIds: ["personal", "travel"],
+  },
+
+  // ── Thread: t-investor (2 messages) ─────────────────
+  {
     id: "e5",
+    threadId: "t-investor",
     from: { name: "Aisha Okonkwo", email: "aisha@investors.io", verified: true },
-    to: [{ name: "Me", email: "me@reclear.io" }],
+    to: [ME],
     subject: "Follow-up from our meeting — next steps",
     preview: "Great conversation yesterday. I'm attaching the term sheet draft for your review.",
     body: `Hi,
@@ -175,10 +302,39 @@ Aisha`,
       { id: "a4", name: "term-sheet-draft.pdf", size: "190 KB", type: "application/pdf" },
     ],
   },
+  {
+    id: "e5b",
+    threadId: "t-investor",
+    from: ME,
+    to: [{ name: "Aisha Okonkwo", email: "aisha@investors.io" }],
+    subject: "Re: Follow-up from our meeting — next steps",
+    preview: "Thank you for the term sheet. I've had a chance to review and have a few questions on 3.2 and 5.",
+    body: `Hi Aisha,
 
-  // ── Inbox / Internal ────────────────────────────────
+Thank you for sending this over — I've reviewed it and it looks like a solid starting point.
+
+I have a couple of questions:
+
+1. Section 3.2 — the 1x non-participating is great. Can we discuss whether the preference applies only in a liquidation or also in certain acquisition scenarios?
+
+2. Section 5 — the pro-rata rights look standard. Does this extend to future rounds beyond Series B?
+
+Happy to jump on a call Thursday or Friday to discuss. Does either work for you?
+
+Best,
+Me`,
+    date: d(3, 16, 0),
+    read: true,
+    starred: false,
+    folder: "sent",
+    category: "primary",
+    tagIds: ["finance", "important"],
+  },
+
+  // ── Thread: t-deploy-freeze (single) ────────────────
   {
     id: "e6",
+    threadId: "t-deploy-freeze",
     from: { name: "Dev Team", email: "dev@reclear.io" },
     to: [{ name: "All", email: "all@reclear.io" }],
     subject: "Deployment freeze: Dec 20–Jan 3",
@@ -198,10 +354,13 @@ Dev Ops`,
     category: "internal",
     tagIds: ["work"],
   },
+
+  // ── Thread: t-roadmap (2 messages) ──────────────────
   {
     id: "e7",
+    threadId: "t-roadmap",
     from: { name: "Lena Schmidt", email: "lena@reclear.io" },
-    to: [{ name: "Me", email: "me@reclear.io" }],
+    to: [ME],
     subject: "Product roadmap Q1 — please review",
     preview: "I've updated the roadmap doc with the new priorities from the all-hands. Would love your feedback.",
     body: `Hey,
@@ -213,8 +372,6 @@ I've updated the roadmap doc with the reprioritisation from the all-hands. The b
 
 I'd love your feedback before I share with the wider team on Thursday. Especially on whether the Jan timeline for tagging is realistic given current eng capacity.
 
-Doc link: [internal notion link]
-
 Thanks!
 Lena`,
     date: d(2, 13, 20),
@@ -225,7 +382,33 @@ Lena`,
     tagIds: ["product", "work"],
   },
   {
+    id: "e7b",
+    threadId: "t-roadmap",
+    from: ME,
+    to: [{ name: "Lena Schmidt", email: "lena@reclear.io" }],
+    subject: "Re: Product roadmap Q1 — please review",
+    preview: "Jan for tagging is tight but doable if we scope it to the core feature. Left comments in the doc.",
+    body: `Hey Lena,
+
+Jan for tagging is tight but doable if we scope it to the core feature (add/remove tags, filter by tag) and defer tag-based rules/automation to Q2.
+
+I left some comments directly in the doc on the mobile timeline — I actually think March is more realistic than February given the current eng workload, so good call there.
+
+One thing I'd flag: API v2 and tagging overlap on the same team. Worth a quick check that we're not creating a bottleneck.
+
+Happy to jump on a call before Thursday if helpful.`,
+    date: d(2, 15, 45),
+    read: true,
+    starred: false,
+    folder: "sent",
+    category: "internal",
+    tagIds: ["product", "work"],
+  },
+
+  // ── Thread: t-hr (single) ────────────────────────────
+  {
     id: "e8",
+    threadId: "t-hr",
     from: { name: "HR Team", email: "hr@reclear.io" },
     to: [{ name: "All", email: "all@reclear.io" }],
     subject: "Annual performance review cycle starts Monday",
@@ -248,8 +431,11 @@ HR Team`,
     category: "internal",
     tagIds: ["work"],
   },
+
+  // ── Thread: t-expenses (single) ──────────────────────
   {
     id: "e9",
+    threadId: "t-expenses",
     from: { name: "Finance Ops", email: "finance@reclear.io" },
     to: [{ name: "Team Leads", email: "leads@reclear.io" }],
     subject: "Expense reports due by 5pm today",
@@ -269,11 +455,12 @@ Finance Ops`,
     tagIds: ["finance", "work"],
   },
 
-  // ── Inbox / Notifications ────────────────────────────
+  // ── Thread: t-github (single) ────────────────────────
   {
     id: "e10",
+    threadId: "t-github",
     from: { name: "GitHub", email: "noreply@github.com", verified: true },
-    to: [{ name: "Me", email: "me@reclear.io" }],
+    to: [ME],
     subject: "[reclear-io/reclear-email] PR #12 approved",
     preview: "lena-schmidt approved your pull request: feat: email tagging system",
     body: `lena-schmidt approved your pull request.
@@ -291,10 +478,13 @@ https://github.com/reclear-io/reclear-email/pull/12`,
     category: "notifications",
     tagIds: ["work"],
   },
+
+  // ── Thread: t-stripe (single) ────────────────────────
   {
     id: "e11",
+    threadId: "t-stripe",
     from: { name: "Stripe", email: "notify@stripe.com", verified: true },
-    to: [{ name: "Me", email: "me@reclear.io" }],
+    to: [ME],
     subject: "Payment received — $2,400.00",
     preview: "A payment of $2,400.00 has been received from Acme Corp.",
     body: `Payment received
@@ -312,10 +502,13 @@ View in Stripe Dashboard`,
     category: "notifications",
     tagIds: ["finance"],
   },
+
+  // ── Thread: t-vercel (single) ────────────────────────
   {
     id: "e12",
+    threadId: "t-vercel",
     from: { name: "Vercel", email: "noreply@vercel.com", verified: true },
-    to: [{ name: "Me", email: "me@reclear.io" }],
+    to: [ME],
     subject: "Your deployment succeeded",
     preview: "reclear-email was successfully deployed to production.",
     body: `Deployment successful
@@ -332,10 +525,13 @@ Status: Ready`,
     category: "notifications",
     tagIds: ["work"],
   },
+
+  // ── Thread: t-linear (single) ────────────────────────
   {
     id: "e13",
+    threadId: "t-linear",
     from: { name: "Linear", email: "notify@linear.app", verified: true },
-    to: [{ name: "Me", email: "me@reclear.io" }],
+    to: [ME],
     subject: "Issue REC-204 assigned to you",
     preview: "Lena Schmidt assigned REC-204: Implement tag filtering in email list",
     body: `New issue assigned to you
@@ -355,12 +551,13 @@ View issue in Linear`,
     tagIds: ["work", "product"],
   },
 
-  // ── Inbox / Newsletter ───────────────────────────────
+  // ── Thread: t-lenny (single) ─────────────────────────
   {
     id: "e14",
+    threadId: "t-lenny",
     from: { name: "Lenny's Newsletter", email: "lenny@lennysnewsletter.com", verified: true },
-    to: [{ name: "Me", email: "me@reclear.io" }],
-    subject: "How the best product managers think about prioritisation",
+    to: [ME],
+    subject: "How the best PMs think about prioritisation",
     preview: "This week: a framework used by PMs at Stripe, Figma, and Notion to cut through the noise.",
     body: `Hi,
 
@@ -378,10 +575,13 @@ Everything else follows from that...
     category: "newsletter",
     tagIds: ["product"],
   },
+
+  // ── Thread: t-css (single) ───────────────────────────
   {
     id: "e15",
+    threadId: "t-css",
     from: { name: "CSS Weekly", email: "hey@css-weekly.com" },
-    to: [{ name: "Me", email: "me@reclear.io" }],
+    to: [ME],
     subject: "CSS Weekly #598 — Tailwind v4, Container Queries, and more",
     preview: "This week's best links: Tailwind v4 deep-dive, CSS anchor positioning, and a neat scroll-driven animation trick.",
     body: `CSS Weekly #598
@@ -400,10 +600,13 @@ This week's highlights:
     category: "newsletter",
     tagIds: ["design"],
   },
+
+  // ── Thread: t-pragmatic (single) ─────────────────────
   {
     id: "e16",
+    threadId: "t-pragmatic",
     from: { name: "The Pragmatic Engineer", email: "pragmatic@newsletter.pragmaticengineer.com", verified: true },
-    to: [{ name: "Me", email: "me@reclear.io" }],
+    to: [ME],
     subject: "Big Tech salaries in 2025: what's changed?",
     preview: "After surveying 2,400 engineers, here's what compensation looks like at FAANG and beyond.",
     body: `Hi,
@@ -422,10 +625,13 @@ Detailed breakdowns by level, company, and role inside...
     category: "newsletter",
     tagIds: ["work"],
   },
+
+  // ── Thread: t-morning (single) ───────────────────────
   {
     id: "e17",
+    threadId: "t-morning",
     from: { name: "Morning Brew", email: "crew@morningbrew.com" },
-    to: [{ name: "Me", email: "me@reclear.io" }],
+    to: [ME],
     subject: "Today's briefing: Fed holds rates, Apple event recap",
     preview: "Good morning. The Fed held rates steady — here's what it means for markets.",
     body: `Good morning!
@@ -446,51 +652,11 @@ Morning Brew`,
     tagIds: ["finance"],
   },
 
-  // ── Sent ─────────────────────────────────────────────
-  {
-    id: "e18",
-    from: { name: "Me", email: "me@reclear.io" },
-    to: [{ name: "Sarah Chen", email: "sarah.chen@acme.com" }],
-    subject: "Re: Q4 Budget Review — numbers look tight",
-    preview: "Thursday 2pm works for me. I'll prepare a summary of the over-spend line items.",
-    body: `Hi Sarah,
-
-Thursday 2pm works great. I'll prepare a summary of the over-spend line items beforehand so we can move quickly.
-
-Talk soon,
-Me`,
-    date: d(0, 9, 45),
-    read: true,
-    starred: false,
-    folder: "sent",
-    category: "primary",
-    tagIds: ["work", "finance"],
-  },
-  {
-    id: "e19",
-    from: { name: "Me", email: "me@reclear.io" },
-    to: [{ name: "Tomás Rivera", email: "tomas@product.co" }],
-    subject: "Re: Weekend trip — confirming dates",
-    preview: "Confirmed! I'll drive myself — see you at the cabin around noon.",
-    body: `Hey Tomás!
-
-Confirmed. I'll drive separately so I have flexibility on the return. Should be there around noon on Friday.
-
-Payment sent via the link — let me know if you got it.
-
-See you then!`,
-    date: d(3, 19, 10),
-    read: true,
-    starred: false,
-    folder: "sent",
-    category: "primary",
-    tagIds: ["personal", "travel"],
-  },
-
   // ── Drafts ───────────────────────────────────────────
   {
     id: "e20",
-    from: { name: "Me", email: "me@reclear.io" },
+    threadId: "t-draft-investor",
+    from: ME,
     to: [{ name: "Aisha Okonkwo", email: "aisha@investors.io" }],
     subject: "Re: Follow-up from our meeting — next steps",
     preview: "Thank you for the term sheet. I've reviewed sections 3.2 and 5 and have a few questions...",
@@ -508,7 +674,8 @@ Thank you for sending over the term sheet. I've reviewed it and have a few quest
   },
   {
     id: "e21",
-    from: { name: "Me", email: "me@reclear.io" },
+    threadId: "t-draft-oncall",
+    from: ME,
     to: [{ name: "Dev Team", email: "dev@reclear.io" }],
     subject: "Proposal: on-call rotation changes",
     preview: "I've been thinking about the current rotation and have a proposal to reduce burnout...",
@@ -528,15 +695,16 @@ The main change I'm proposing: move from weekly to bi-weekly rotations, with a d
   // ── Spam ─────────────────────────────────────────────
   {
     id: "e22",
+    threadId: "t-spam-lottery",
     from: { name: "Lottery Winner", email: "winner@prize-claims.xyz" },
-    to: [{ name: "Me", email: "me@reclear.io" }],
+    to: [ME],
     subject: "YOU HAVE WON $1,000,000 — CLAIM NOW",
     preview: "Congratulations! You have been selected as the winner of our international lottery.",
     body: `CONGRATULATIONS!!!
 
 You have been selected as the WINNER of our International Online Lottery. Your email address was randomly selected from 10 million entries worldwide.
 
-To claim your prize of USD $1,000,000 you must respond within 48 hours with your full name, address, and phone number...`,
+To claim your prize of USD $1,000,000 you must respond within 48 hours...`,
     date: d(2, 3, 0),
     read: false,
     starred: false,
@@ -546,8 +714,9 @@ To claim your prize of USD $1,000,000 you must respond within 48 hours with your
   },
   {
     id: "e23",
+    threadId: "t-spam-deals",
     from: { name: "Deals Alert", email: "deals@cheapmeds-online.biz" },
-    to: [{ name: "Me", email: "me@reclear.io" }],
+    to: [ME],
     subject: "💊 70% off — limited time ONLY",
     preview: "Get your medications at 70% off retail price. No prescription needed.",
     body: `Special offer — today only!
@@ -566,8 +735,9 @@ Click here to order now...`,
   // ── Trash ─────────────────────────────────────────────
   {
     id: "e24",
+    threadId: "t-trash-news",
     from: { name: "Old Newsletter", email: "news@outdated-service.com" },
-    to: [{ name: "Me", email: "me@reclear.io" }],
+    to: [ME],
     subject: "Your weekly digest",
     preview: "Here's what happened this week in tech...",
     body: `Your weekly tech digest...`,
@@ -580,8 +750,9 @@ Click here to order now...`,
   },
   {
     id: "e25",
+    threadId: "t-trash-account",
     from: { name: "Old Service", email: "no-reply@service.io" },
-    to: [{ name: "Me", email: "me@reclear.io" }],
+    to: [ME],
     subject: "Your account will be deleted",
     preview: "Your free trial has expired. Your data will be deleted in 7 days.",
     body: `Your trial has expired and your data will be deleted in 7 days unless you upgrade.`,

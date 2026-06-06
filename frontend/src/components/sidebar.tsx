@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import Image from "next/image";
 import {
   InboxIcon,
   SendIcon,
@@ -11,7 +12,9 @@ import {
   PlusIcon,
   TagIcon,
   PencilLineIcon,
-  XIcon,
+  SettingsIcon,
+  UsersIcon,
+  LogOutIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -31,8 +34,12 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useEmailStore } from "@/store/email-store";
+import { useAuthStore } from "@/store/auth-store";
 import type { Folder } from "@/data/emails";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { SettingsModal } from "@/components/settings-modal";
+import { InstallButton } from "@/components/install-button";
+import { AdminUsersModal } from "@/components/admin-users-modal";
 
 const TAG_COLORS = [
   { value: "blue", label: "Blue", cls: "bg-blue-500" },
@@ -45,11 +52,7 @@ const TAG_COLORS = [
   { value: "yellow", label: "Yellow", cls: "bg-yellow-500" },
 ];
 
-interface SidebarProps {
-  onClose?: () => void;
-}
-
-export function Sidebar({ onClose }: SidebarProps) {
+export function Sidebar() {
   const {
     currentFolder,
     setFolder,
@@ -61,7 +64,10 @@ export function Sidebar({ onClose }: SidebarProps) {
     addUserTag,
   } = useEmailStore();
 
+  const { user, clearAuth } = useAuthStore();
   const [addTagOpen, setAddTagOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [adminOpen, setAdminOpen] = useState(false);
   const [newTagName, setNewTagName] = useState("");
   const [newTagColor, setNewTagColor] = useState("blue");
 
@@ -76,7 +82,6 @@ export function Sidebar({ onClose }: SidebarProps) {
 
   const handleFolderClick = (folder: Folder) => {
     setFolder(folder);
-    onClose?.();
   };
 
   const handleAddTag = () => {
@@ -92,17 +97,10 @@ export function Sidebar({ onClose }: SidebarProps) {
       <div className="flex h-full flex-col bg-sidebar border-r border-sidebar-border">
         {/* Logo */}
         <div className="flex h-14 items-center gap-2.5 px-4 border-b border-sidebar-border shrink-0">
-          <div className="flex size-7 items-center justify-center rounded-lg bg-primary">
-            <InboxIcon className="size-3.5 text-primary-foreground" />
-          </div>
+          <Image src="/favicon-32x32.png" alt="reclear" width={28} height={28} className="size-7 rounded-lg" />
           <span className="font-semibold text-sm tracking-tight text-foreground">reclear</span>
-          <div className="ml-auto flex items-center gap-1">
+          <div className="ml-auto">
             <ThemeToggle />
-            {onClose && (
-              <Button variant="ghost" size="icon-xs" onClick={onClose}>
-                <XIcon className="size-3.5" />
-              </Button>
-            )}
           </div>
         </div>
 
@@ -110,7 +108,7 @@ export function Sidebar({ onClose }: SidebarProps) {
           <div className="p-3 space-y-5">
             {/* Compose */}
             <Button
-              onClick={() => { setComposing(true); onClose?.(); }}
+              onClick={() => setComposing(true)}
               size="sm"
               className="w-full h-8 gap-2 justify-start font-medium"
             >
@@ -207,16 +205,48 @@ export function Sidebar({ onClose }: SidebarProps) {
         {/* Footer */}
         <div className="shrink-0 border-t border-sidebar-border p-3">
           <div className="flex items-center gap-2.5">
-            <div className="flex size-7 items-center justify-center rounded-full bg-muted text-xs font-semibold uppercase">
-              me
+            <div className="flex size-7 items-center justify-center rounded-full bg-muted text-xs font-semibold uppercase shrink-0">
+              {user?.name?.slice(0, 2) ?? "me"}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium text-foreground truncate">Me</p>
-              <p className="text-[11px] text-muted-foreground truncate">me@reclear.io</p>
+              <p className="text-xs font-medium text-foreground truncate">{user?.name ?? "Me"}</p>
+              <p className="text-[11px] text-muted-foreground truncate">{user?.email ?? "me@reclear.io"}</p>
+            </div>
+            <div className="flex items-center gap-0.5 shrink-0">
+              <InstallButton iconOnly />
+              {user?.role === "admin" && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="ghost" size="icon-xs" className="text-muted-foreground hover:text-foreground" onClick={() => setAdminOpen(true)}>
+                      <UsersIcon className="size-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">Manage users</TooltipContent>
+                </Tooltip>
+              )}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon-xs" className="text-muted-foreground hover:text-foreground" onClick={() => setSettingsOpen(true)}>
+                    <SettingsIcon className="size-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">Settings</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon-xs" className="text-muted-foreground hover:text-foreground" onClick={clearAuth}>
+                    <LogOutIcon className="size-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">Sign out</TooltipContent>
+              </Tooltip>
             </div>
           </div>
         </div>
       </div>
+
+      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <AdminUsersModal open={adminOpen} onClose={() => setAdminOpen(false)} />
 
       {/* Add Tag Dialog */}
       <Dialog open={addTagOpen} onOpenChange={setAddTagOpen}>
