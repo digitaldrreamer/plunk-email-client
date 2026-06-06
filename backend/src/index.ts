@@ -67,6 +67,7 @@ app.listen(PORT, async () => {
   console.log(`reclear-email backend running on http://localhost:${PORT}`);
   await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS signature text`);
   await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS invite_expires_at text`);
+  await db.execute(sql`ALTER TABLE emails ALTER COLUMN spam_score TYPE real USING spam_score::real`);
   await seedTags();
 
   if (!process.env.PLUNK_SECRET_KEY) console.warn("⚠  PLUNK_SECRET_KEY not set — email sending will fail");

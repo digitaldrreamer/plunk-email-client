@@ -1,4 +1,4 @@
-import { pgTable, text, boolean, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, boolean, integer, real } from "drizzle-orm/pg-core";
 
 export const users = pgTable("users", {
   id: text("id").primaryKey(),
@@ -42,7 +42,7 @@ export const emails = pgTable("emails", {
   starred: boolean("starred").notNull().default(false),
   tagIds: text("tag_ids").notNull().default("[]"),
   hasAttachments: boolean("has_attachments").notNull().default(false),
-  spamScore: integer("spam_score"),
+  spamScore: real("spam_score"),
   threatUrls: text("threat_urls").notNull().default("[]"),
   // Delivery tracking (outbound emails only)
   plunkEmailId: text("plunk_email_id"),

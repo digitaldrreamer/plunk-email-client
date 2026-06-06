@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { db } from "../db";
 import { tags } from "../db/schema";
 import { logger, describeError } from "../lib/logger";
-import { addEmail, updateEmailByPlunkId, getEmailByPlunkId, type StoredEmail } from "../lib/store";
+import { addEmail, updateEmail, updateEmailByPlunkId, getEmailByPlunkId, type StoredEmail } from "../lib/store";
 import { sseEmit } from "../lib/sse";
 import { isHardFail, postmarkSpamScore, isSpam, type Verdict } from "../lib/spam";
 import { categorizeEmail } from "../lib/mistral";
@@ -128,7 +128,7 @@ router.post("/inbound", async (req, res) => {
         const threats = await checkUrlSafety(email.body);
         if (threats.length > 0) {
           const threatUrlList = threats.map((t) => t.url);
-          await updateEmailByPlunkId(emailId, { category: "dangerous", threatUrls: threatUrlList });
+          await updateEmail(emailId, { category: "dangerous", threatUrls: threatUrlList });
           sseEmit("email-updated", { id: emailId, category: "dangerous", threatUrls: threatUrlList });
           logger.warn("Inbound: dangerous URLs detected", { action: "inbound_threat", emailId, urls: threatUrlList });
         }
