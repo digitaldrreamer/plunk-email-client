@@ -3,7 +3,7 @@ import crypto from "crypto";
 import { eq } from "drizzle-orm";
 import { db } from "../db";
 import { tags } from "../db/schema";
-import { logger } from "../lib/logger";
+import { logger, describeError } from "../lib/logger";
 import { addEmail, updateEmailByPlunkId, getEmailByPlunkId, type StoredEmail } from "../lib/store";
 import { sseEmit } from "../lib/sse";
 import { isHardFail, postmarkSpamScore, isSpam, type Verdict } from "../lib/spam";
@@ -79,8 +79,7 @@ router.post("/inbound", async (req, res) => {
 
         for (const nt of ai.newTags) {
           const id = nt.name.toLowerCase().replace(/\s+/g, "-");
-          const [exists] = await db.select({ id: tags.id }).from(tags).where(eq(tags.id, id)).limit(1);
-          if (!exists) await db.insert(tags).values({ id, name: nt.name, color: nt.color });
+          await db.insert(tags).values({ id, name: nt.name, color: nt.color }).onConflictDoNothing({ target: tags.id });
           if (!tagIds.includes(id)) tagIds.push(id);
         }
       } catch (err) {
@@ -138,7 +137,7 @@ router.post("/inbound", async (req, res) => {
       }
     });
   } catch (err) {
-    logger.error("Inbound: unhandled error", { action: "inbound_error", error: String(err) });
+    logger.error("Inbound: unhandled error", { action: "inbound_error", ...describeError(err) });
     res.status(200).json({ status: "error" });
   }
 });
@@ -276,7 +275,7 @@ async function eventsHandler(req: Request, res: Response): Promise<void> {
 
     logger.warn("Event: unrecognised payload", { action: "event_unknown", payload: JSON.stringify(event).slice(0, 200) });
   } catch (err) {
-    logger.error("Event: unhandled error", { action: "event_error", error: String(err) });
+    logger.error("Event: unhandled error", { action: "event_error", ...describeError(err) });
   }
 }
 

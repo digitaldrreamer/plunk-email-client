@@ -20,6 +20,24 @@ function emit(level: "info" | "warn" | "error", message: string, meta: LogMeta =
   else console.log(line);
 }
 
+// Drizzle/postgres-js wrap the real Postgres error (code/detail/constraint) in `.cause`,
+// and `String(err)` only yields "Error: Failed query: ..." — surface the cause too.
+export function describeError(err: unknown): { error: string; cause?: { message?: string; code?: string; detail?: string; constraint?: string } } {
+  const e = err as { message?: string; cause?: { message?: string; code?: string; detail?: string; constraint_name?: string; constraint?: string } };
+  const cause = e?.cause;
+  return {
+    error: e?.message ?? String(err),
+    ...(cause && {
+      cause: {
+        message: cause.message,
+        code: cause.code,
+        detail: cause.detail,
+        constraint: cause.constraint_name ?? cause.constraint,
+      },
+    }),
+  };
+}
+
 export const logger = {
   info: (message: string, meta?: LogMeta) => emit("info", message, meta),
   warn: (message: string, meta?: LogMeta) => emit("warn", message, meta),

@@ -107,10 +107,6 @@ export async function getEmailByPlunkId(plunkEmailId: string): Promise<StoredEma
 }
 
 export async function addEmail(email: StoredEmail): Promise<void> {
-  const [exists] = await db.select({ id: emails.id }).from(emails)
-    .where(eq(emails.messageId, email.messageId)).limit(1);
-  if (exists) return;
-
   await db.insert(emails).values({
     id: email.id,
     messageId: email.messageId,
@@ -138,7 +134,7 @@ export async function addEmail(email: StoredEmail): Promise<void> {
     firstOpenedAt: email.firstOpenedAt ?? null,
     firstClickedAt: email.firstClickedAt ?? null,
     bouncedAt: email.bouncedAt ?? null,
-  });
+  }).onConflictDoNothing({ target: emails.messageId });
 }
 
 export async function updateEmail(id: string, patch: Partial<StoredEmail>): Promise<StoredEmail | undefined> {

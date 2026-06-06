@@ -30,36 +30,31 @@ function rowToContact(row: typeof contacts.$inferSelect): Contact {
 export async function upsertContact(email: string, name = ""): Promise<void> {
   const normalised = email.toLowerCase().trim();
   const now = new Date().toISOString();
+  const id = `c-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
-  const [existing] = await db
-    .select({ id: contacts.id })
-    .from(contacts)
-    .where(eq(contacts.email, normalised))
-    .limit(1);
+  // Try the insert first — `onConflictDoNothing` makes this race-safe against
+  // concurrent upserts for the same address (email is unique). If we lose the
+  // race, `inserted` comes back empty and we fall through to the update below.
+  const inserted = await db.insert(contacts).values({
+    id,
+    email: normalised,
+    name,
+    subscribed: true,
+    bounced: false,
+    complained: false,
+    lastSeenAt: now,
+    createdAt: now,
+  }).onConflictDoNothing({ target: contacts.email }).returning({ id: contacts.id });
 
-  if (existing) {
-    await db.update(contacts)
-      .set({
-        ...(name && { name }),
-        lastSeenAt: now,
-      })
-      .where(eq(contacts.id, existing.id));
-  } else {
-    const id = `c-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    await db.insert(contacts).values({
-      id,
-      email: normalised,
-      name,
-      subscribed: true,
-      bounced: false,
-      complained: false,
-      lastSeenAt: now,
-      createdAt: now,
-    });
-
-    // Mirror to Plunk async
+  if (inserted.length > 0) {
+    // Mirror to Plunk async — only on first creation
     setImmediate(() => upsertPlunkContact(normalised, name ? { name } : undefined).catch(() => null));
+    return;
   }
+
+  await db.update(contacts)
+    .set({ ...(name && { name }), lastSeenAt: now })
+    .where(eq(contacts.email, normalised));
 }
 
 export async function markContactBounced(email: string): Promise<void> {

@@ -14,7 +14,7 @@ import {
 } from "../lib/store";
 import { requireAuth } from "../middleware/auth";
 import { addSseClient, removeSseClient, sseEmit } from "../lib/sse";
-import { logger } from "../lib/logger";
+import { logger, describeError } from "../lib/logger";
 
 const router = Router();
 router.use(requireAuth);
@@ -262,7 +262,7 @@ router.post(
 
       res.json({ success: true, data: result.data });
     } catch (err) {
-      logger.error("Email send error", { action: "email_send", userEmail: req.user?.email, error: String(err) });
+      logger.error("Email send error", { action: "email_send", userEmail: req.user?.email, ...describeError(err) });
       res.status(500).json({ success: false, error: "Internal server error" });
     }
   }
