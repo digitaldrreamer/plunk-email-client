@@ -1,6 +1,6 @@
 // Thin wrapper so all API calls include the auth token and base URL.
 
-const BACKEND = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+const BACKEND = process.env.NEXT_PUBLIC_API_URL || "https://api.mail.reclear.io";
 
 export function apiUrl(path: string): string {
   return `${BACKEND}${path}`;

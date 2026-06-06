@@ -29,7 +29,7 @@ import {
   LinkIcon,
 } from "lucide-react";
 
-const BACKEND = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+const BACKEND = process.env.NEXT_PUBLIC_API_URL || "https://api.mail.reclear.io";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";

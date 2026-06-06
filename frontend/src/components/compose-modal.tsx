@@ -18,7 +18,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 
-const BACKEND = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+const BACKEND = process.env.NEXT_PUBLIC_API_URL || "https://api.mail.reclear.io";
 const DRAFT_KEY = "reclear-compose-draft";
 
 // ── Recipient chip input ──────────────────────────────────────────────────────
