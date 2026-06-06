@@ -245,6 +245,7 @@ export function Sidebar() {
         {/* Footer */}
         <div className="shrink-0 border-t border-sidebar-border pt-2">
           <InstallButton variant="card" />
+          <Separator className="my-2" />
           <div className="px-3 pb-3">
             <div className="flex items-center gap-2.5">
               <div className="flex size-7 items-center justify-center rounded-full bg-muted text-xs font-semibold uppercase shrink-0">
