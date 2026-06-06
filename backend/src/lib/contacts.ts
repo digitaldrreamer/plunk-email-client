@@ -1,4 +1,4 @@
-import { eq, or, ilike } from "drizzle-orm";
+import { eq, or, ilike, desc, sql } from "drizzle-orm";
 import { db } from "../db";
 import { contacts } from "../db/schema";
 import { searchPlunkContacts, upsertPlunkContact } from "./plunk";
@@ -100,6 +100,28 @@ export async function searchContacts(query: string): Promise<Contact[]> {
     .limit(8);
 
   return rows.map(rowToContact);
+}
+
+export async function listContacts(
+  offset: number,
+  limit: number
+): Promise<{ items: Contact[]; total: number }> {
+  const rows = await db
+    .select()
+    .from(contacts)
+    .orderBy(desc(contacts.lastSeenAt))
+    .limit(limit)
+    .offset(offset);
+  const [{ total }] = await db
+    .select({ total: sql<number>`cast(count(*) as int)` })
+    .from(contacts);
+  return { items: rows.map(rowToContact), total };
+}
+
+export async function setContactSubscribed(email: string, subscribed: boolean): Promise<void> {
+  await db.update(contacts)
+    .set({ subscribed })
+    .where(eq(contacts.email, email.toLowerCase()));
 }
 
 export async function getContactByEmail(email: string): Promise<Contact | undefined> {

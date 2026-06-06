@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { format, isToday, isYesterday, isThisYear } from "date-fns";
 import {
   StarIcon,
@@ -13,11 +13,14 @@ import {
   FilterIcon,
   MessageSquareIcon,
   ShieldAlertIcon,
+  AlignJustifyIcon,
 } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useEmailStore, type Thread } from "@/store/email-store";
+import { usePreferencesStore } from "@/store/preferences-store";
 import { getTag } from "@/data/tags";
 import type { Category } from "@/data/emails";
 import {
@@ -150,6 +153,24 @@ function ParticipantAvatars({ thread }: { thread: Thread }) {
   );
 }
 
+// ── Skeleton row ─────────────────────────────────────────────────────────────
+
+function SkeletonRow() {
+  return (
+    <div className="flex gap-3 px-4 py-3 border-b border-border animate-pulse">
+      <div className="size-8 rounded-full bg-muted shrink-0 mt-0.5" />
+      <div className="flex-1 space-y-2 min-w-0">
+        <div className="flex justify-between gap-4">
+          <div className="h-3 w-24 rounded bg-muted" />
+          <div className="h-3 w-10 rounded bg-muted" />
+        </div>
+        <div className="h-3 w-3/4 rounded bg-muted" />
+        <div className="h-3 w-1/2 rounded bg-muted" />
+      </div>
+    </div>
+  );
+}
+
 export function EmailList() {
   const {
     currentFolder,
@@ -164,13 +185,38 @@ export function EmailList() {
     visibleThreads,
     unreadCount,
   } = useEmailStore();
+  const { density, setDensity } = usePreferencesStore();
 
-  // Track which dangerous threads have already shown the warning this session
   const [warnedIds, setWarnedIds] = useState<Set<string>>(new Set());
   const [pendingDangerThread, setPendingDangerThread] = useState<Thread | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [loading, setLoading] = useState(true);
+  const searchRef = useRef<HTMLInputElement>(null);
 
-  const threads = visibleThreads();
+  // Brief skeleton on mount to simulate initial data load
+  useEffect(() => { const t = setTimeout(() => setLoading(false), 400); return () => clearTimeout(t); }, []);
+
+  // Reset search when folder changes
+  useEffect(() => { setSearchQuery(""); }, [currentFolder]);
+
+  const allThreads = visibleThreads();
+  const threads = searchQuery.trim()
+    ? allThreads.filter((t) => {
+        const q = searchQuery.toLowerCase();
+        return (
+          t.subject.toLowerCase().includes(q) ||
+          t.participants.some((p) => p.name.toLowerCase().includes(q) || p.email.toLowerCase().includes(q)) ||
+          t.latestEmail.preview.toLowerCase().includes(q)
+        );
+      })
+    : allThreads;
   const isInbox = currentFolder === "inbox";
+
+  const handleStar = (e: React.MouseEvent, thread: Thread) => {
+    e.stopPropagation();
+    toggleStarThread(thread.id);
+    toast(thread.isStarred ? "Removed from starred" : "Added to starred", { duration: 2000 });
+  };
 
   const handleThreadClick = (thread: Thread) => {
     if (thread.category === "dangerous" && !warnedIds.has(thread.id)) {
@@ -208,6 +254,14 @@ export function EmailList() {
                   Filtered
                 </span>
               )}
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => setDensity(density === "comfortable" ? "compact" : "comfortable")}
+                title={density === "comfortable" ? "Switch to compact" : "Switch to comfortable"}
+              >
+                <AlignJustifyIcon className={cn("size-3.5", density === "compact" ? "text-primary" : "text-muted-foreground")} />
+              </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon-sm">
@@ -230,8 +284,11 @@ export function EmailList() {
             <div className="relative">
               <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
               <input
+                ref={searchRef}
                 type="text"
-                placeholder="Search..."
+                placeholder="Search…"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full h-8 rounded-md border border-input bg-background pl-8 pr-3 text-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               />
             </div>
@@ -279,7 +336,16 @@ export function EmailList() {
 
         {/* ── Thread list ── */}
         <div className="flex-1 overflow-y-auto">
-          {threads.length === 0 ? (
+          {loading ? (
+            Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} />)
+          ) : searchQuery && threads.length === 0 ? (
+            <div className="flex h-full items-center justify-center text-center px-6">
+              <div className="space-y-1">
+                <SearchIcon className="size-8 text-muted-foreground/30 mx-auto" />
+                <p className="text-sm text-muted-foreground">No results for &ldquo;{searchQuery}&rdquo;</p>
+              </div>
+            </div>
+          ) : threads.length === 0 ? (
             <div className="flex h-full items-center justify-center text-center px-6">
               <div className="space-y-1">
                 {currentCategory === "dangerous" ? (
@@ -301,6 +367,7 @@ export function EmailList() {
               const isSelected = selectedThreadId === thread.id;
               const hasUnread = thread.unreadCount > 0;
               const isDangerous = thread.category === "dangerous";
+              const isCompact = density === "compact";
               const latest = thread.latestEmail;
 
               const others = thread.participants.filter((p) => p.email !== "me@reclear.io");
@@ -330,7 +397,7 @@ export function EmailList() {
                       : isSelected
                       ? "bg-accent"
                       : "hover:bg-muted/40",
-                    isDangerous ? "py-3 pr-4" : "py-3",
+                    isDangerous ? (isCompact ? "py-2 pr-4" : "py-3 pr-4") : (isCompact ? "py-2" : "py-3"),
                     hasUnread && !isSelected && !isDangerous && "bg-muted/20"
                   )}
                 >
@@ -401,13 +468,15 @@ export function EmailList() {
                       )}
                     </div>
 
-                    {/* Row 3: preview */}
-                    <p className={cn(
-                      "text-[11px] line-clamp-1 leading-relaxed",
-                      isDangerous ? "text-red-500/60 dark:text-red-400/50" : "text-muted-foreground"
-                    )}>
-                      {latest.preview}
-                    </p>
+                    {/* Row 3: preview (hidden in compact mode) */}
+                    {!isCompact && (
+                      <p className={cn(
+                        "text-[11px] line-clamp-1 leading-relaxed",
+                        isDangerous ? "text-red-500/60 dark:text-red-400/50" : "text-muted-foreground"
+                      )}>
+                        {latest.preview}
+                      </p>
+                    )}
 
                     {/* Row 4: threat URLs summary */}
                     {isDangerous && thread.threatUrls.length > 0 && (
@@ -446,7 +515,7 @@ export function EmailList() {
 
                   {/* Star */}
                   <button
-                    onClick={(e) => { e.stopPropagation(); toggleStarThread(thread.id); }}
+                    onClick={(e) => handleStar(e, thread)}
                     className={cn(
                       "shrink-0 self-start mt-0.5 p-0.5 rounded transition-colors",
                       thread.isStarred

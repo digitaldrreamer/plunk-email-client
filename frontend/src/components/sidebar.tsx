@@ -15,6 +15,7 @@ import {
   SettingsIcon,
   UsersIcon,
   LogOutIcon,
+  BookUserIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -51,7 +52,7 @@ const TAG_COLORS = [
   { value: "yellow", label: "Yellow", cls: "bg-yellow-500" },
 ];
 
-export function Sidebar({ onOpenSettings }: { onOpenSettings?: (tab?: string) => void }) {
+export function Sidebar({ onOpenSettings, onOpenContacts }: { onOpenSettings?: (tab?: string) => void; onOpenContacts?: () => void }) {
   const {
     currentFolder,
     setFolder,
@@ -153,6 +154,15 @@ export function Sidebar({ onOpenSettings }: { onOpenSettings?: (tab?: string) =>
                 })}
               </div>
             </div>
+
+            {/* Contacts */}
+            <button
+              onClick={() => onOpenContacts?.()}
+              className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-colors"
+            >
+              <BookUserIcon className="size-4 shrink-0" />
+              Contacts
+            </button>
 
             <Separator />
 
