@@ -159,12 +159,13 @@ router.post(
         ? [body.to]
         : [];
 
-      const { subject, body: htmlBody, from, reply, override } = body as {
+      const { subject, body: htmlBody, from, reply, override, threadId } = body as {
         subject?: string;
         body?: string;
         from?: string;
         reply?: string;
         override?: string;
+        threadId?: string;
       };
 
       if (!to.length || !subject || !htmlBody) {
@@ -242,7 +243,7 @@ router.post(
       const sentEmail: StoredEmail = {
         id: emailId,
         messageId: emailId,
-        threadId: `t-sent-${Date.now()}`,
+        threadId: threadId ?? `t-sent-${Date.now()}`,
         from: { name: senderName, email: senderEmail },
         to: to.map((addr) => ({ name: addr, email: addr })),
         subject,

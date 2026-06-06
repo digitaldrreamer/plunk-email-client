@@ -413,6 +413,7 @@ export function EmailDetail() {
       form.append("to[]", toAddress);
       form.append("subject", thread.subject.startsWith("Re:") ? thread.subject : `Re: ${thread.subject}`);
       form.append("body", html || plain);
+      form.append("threadId", thread.id);
       if (override) form.append("override", "true");
 
       const res = await fetch("/api/emails/send", { method: "POST", credentials: "include", body: form });
