@@ -3,6 +3,7 @@ import multer from "multer";
 import { sendEmail } from "../lib/plunk";
 import { scanBuffer } from "../lib/scanner";
 import { checkUrlSafety } from "../lib/safe-browsing";
+import { htmlToText } from "../lib/html-to-text";
 import { upsertContact } from "../lib/contacts";
 import {
   listEmails,
@@ -32,7 +33,13 @@ router.get("/stream", (req, res) => {
 
   // Heartbeat every 25 s to prevent proxy/load-balancer timeouts
   const heartbeat = setInterval(() => {
-    try { res.write(":\n\n"); } catch { clearInterval(heartbeat); }
+    try {
+      res.write(":\n\n");
+      (res as unknown as { flush?: () => void }).flush?.();
+    } catch {
+      clearInterval(heartbeat);
+      removeSseClient(res);
+    }
   }, 25_000);
 
   req.on("close", () => {
@@ -65,7 +72,7 @@ router.post("/draft", async (req, res) => {
     to: (to ?? []).map((addr) => ({ name: addr, email: addr })),
     subject: subject?.trim() || "(no subject)",
     body: body ?? "",
-    preview: (body ?? "").replace(/<[^>]+>/g, "").slice(0, 120),
+    preview: htmlToText(body ?? "").slice(0, 120),
     date: new Date().toISOString(),
     folder: "drafts",
     category: "primary",
@@ -93,7 +100,7 @@ router.patch("/draft/:id", async (req, res) => {
     to: (to ?? []).map((addr) => ({ name: addr, email: addr })),
     subject: subject?.trim() || "(no subject)",
     body: body ?? "",
-    preview: (body ?? "").replace(/<[^>]+>/g, "").slice(0, 120),
+    preview: htmlToText(body ?? "").slice(0, 120),
     date: new Date().toISOString(),
   });
 
@@ -208,13 +215,19 @@ router.post(
       const senderEmail = req.user!.email;
       const senderName = req.user!.name || senderEmail.split("@")[0];
 
+      // Use the sender's own address if it's on the Plunk-verified domain; otherwise
+      // fall back to the shared notification address (external logins, etc.)
+      const plunkFrom = process.env.PLUNK_FROM_EMAIL ?? "noreply@team.reclear.io";
+      const verifiedDomain = plunkFrom.split("@")[1];
+      const fromEmail = (verifiedDomain && senderEmail.endsWith(`@${verifiedDomain}`))
+        ? senderEmail
+        : plunkFrom;
+
       const result = await sendEmail({
         to,
         subject,
         body: htmlBody,
-        // Use Plunk-verified sender address but surface the user's name in the display name
-        from: from ?? { name: senderName, email: process.env.PLUNK_FROM_EMAIL ?? "noreply@team.reclear.io" },
-        // Reply-to = the user's actual team inbox so replies land in their inbox
+        from: from ?? { name: senderName, email: fromEmail },
         reply: reply ?? senderEmail,
         ...(attachments.length && { attachments }),
       });
@@ -234,7 +247,7 @@ router.post(
         to: to.map((addr) => ({ name: addr, email: addr })),
         subject,
         body: htmlBody,
-        preview: htmlBody.replace(/<[^>]+>/g, "").slice(0, 120),
+        preview: htmlToText(htmlBody).slice(0, 120),
         date: new Date().toISOString(),
         folder: "sent",
         category: "primary",

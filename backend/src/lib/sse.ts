@@ -15,6 +15,8 @@ export function sseEmit(event: string, data: unknown): void {
   for (const res of clients) {
     try {
       res.write(chunk);
+      // Flush past any TCP send-buffer / Nagle delay so the event arrives immediately
+      (res as unknown as { flush?: () => void }).flush?.();
     } catch {
       clients.delete(res);
     }

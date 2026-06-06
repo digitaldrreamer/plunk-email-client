@@ -4,13 +4,14 @@ import { eq } from "drizzle-orm";
 import { db } from "../db";
 import { tags } from "../db/schema";
 import { logger, describeError } from "../lib/logger";
-import { addEmail, updateEmail, updateEmailByPlunkId, getEmailByPlunkId, type StoredEmail } from "../lib/store";
+import { addEmail, updateEmail, updateEmailByPlunkId, getEmailByPlunkId, STATUS_RANK, type StoredEmail } from "../lib/store";
 import { sseEmit } from "../lib/sse";
 import { isHardFail, postmarkSpamScore, isSpam, type Verdict } from "../lib/spam";
 import { categorizeEmail } from "../lib/mistral";
 import { checkUrlSafety } from "../lib/safe-browsing";
 import { upsertContact, markContactBounced, markContactComplained } from "../lib/contacts";
 import { sendEmail } from "../lib/plunk";
+import { htmlToText } from "../lib/html-to-text";
 
 const router = Router();
 
@@ -61,7 +62,7 @@ router.post("/inbound", async (req, res) => {
     }
 
     const senderName = parseSenderName(event.fromHeader ?? event.from);
-    const bodyText = (event.body ?? "").replace(/<[^>]+>/g, "").trim();
+    const bodyText = htmlToText(event.body ?? "");
 
     let category: StoredEmail["category"] = "primary";
     let folder: StoredEmail["folder"] = "inbox";
@@ -111,7 +112,12 @@ router.post("/inbound", async (req, res) => {
       clickCount: 0,
     };
 
-    await addEmail(email);
+    const inserted = await addEmail(email);
+    if (!inserted) {
+      logger.info("Inbound: duplicate, skipping", { action: "inbound_duplicate", messageId: event.messageId });
+      return res.status(200).json({ status: "ok", duplicate: true });
+    }
+
     sseEmit("new-email", email);
     logger.info("Inbound: email stored", { action: "inbound_stored", emailId, from: event.from, subject: event.subject, category, folder });
 
@@ -181,8 +187,11 @@ async function eventsHandler(req: Request, res: Response): Promise<void> {
     if ("sentAt" in event) {
       logger.info("Event: email sent", { action: "event_sent", contactEmail, emailId });
       if (emailId) {
-        const updated = await updateEmailByPlunkId(emailId, { deliveryStatus: "sent" });
-        if (updated) sseEmit("email-updated", { id: updated.id, deliveryStatus: "sent" });
+        const existing = await getEmailByPlunkId(emailId);
+        if (existing && canAdvance(existing.deliveryStatus, "sent")) {
+          const updated = await updateEmailByPlunkId(emailId, { deliveryStatus: "sent" });
+          if (updated) sseEmit("email-updated", { id: updated.id, deliveryStatus: "sent" });
+        }
       }
       return;
     }
@@ -191,9 +200,12 @@ async function eventsHandler(req: Request, res: Response): Promise<void> {
     if ("deliveredAt" in event) {
       logger.info("Event: email delivered", { action: "event_delivered", contactEmail, emailId });
       if (emailId) {
-        const patch = { deliveryStatus: "delivered", deliveredAt: String(event.deliveredAt) };
-        const updated = await updateEmailByPlunkId(emailId, patch);
-        if (updated) sseEmit("email-updated", { id: updated.id, ...patch });
+        const existing = await getEmailByPlunkId(emailId);
+        if (existing && canAdvance(existing.deliveryStatus, "delivered")) {
+          const patch = { deliveryStatus: "delivered", deliveredAt: String(event.deliveredAt) };
+          const updated = await updateEmailByPlunkId(emailId, patch);
+          if (updated) sseEmit("email-updated", { id: updated.id, ...patch });
+        }
       }
       return;
     }
@@ -204,13 +216,16 @@ async function eventsHandler(req: Request, res: Response): Promise<void> {
       const isFirst = event.isFirstOpen === true;
       logger.info("Event: email opened", { action: "event_open", contactEmail, emailId, opens, isFirst: event.isFirstOpen });
       if (emailId) {
-        const patch = {
-          deliveryStatus: "opened",
-          openCount: opens,
-          ...(isFirst && { firstOpenedAt: String(event.openedAt) }),
-        };
-        const updated = await updateEmailByPlunkId(emailId, patch);
-        if (updated) sseEmit("email-updated", { id: updated.id, ...patch });
+        const existing = await getEmailByPlunkId(emailId);
+        if (existing) {
+          const patch = {
+            ...(canAdvance(existing.deliveryStatus, "opened") && { deliveryStatus: "opened" }),
+            openCount: Math.max(opens, existing.openCount),
+            ...(isFirst && !existing.firstOpenedAt && { firstOpenedAt: String(event.openedAt) }),
+          };
+          const updated = await updateEmailByPlunkId(emailId, patch);
+          if (updated) sseEmit("email-updated", { id: updated.id, ...patch });
+        }
       }
       return;
     }
@@ -221,13 +236,16 @@ async function eventsHandler(req: Request, res: Response): Promise<void> {
       const isFirst = event.isFirstClick === true;
       logger.info("Event: link clicked", { action: "event_click", contactEmail, emailId, clicks, link: event.link });
       if (emailId) {
-        const patch = {
-          deliveryStatus: "clicked",
-          clickCount: clicks,
-          ...(isFirst && { firstClickedAt: String(event.clickedAt) }),
-        };
-        const updated = await updateEmailByPlunkId(emailId, patch);
-        if (updated) sseEmit("email-updated", { id: updated.id, ...patch });
+        const existing = await getEmailByPlunkId(emailId);
+        if (existing) {
+          const patch = {
+            ...(canAdvance(existing.deliveryStatus, "clicked") && { deliveryStatus: "clicked" }),
+            clickCount: Math.max(clicks, existing.clickCount),
+            ...(isFirst && !existing.firstClickedAt && { firstClickedAt: String(event.clickedAt) }),
+          };
+          const updated = await updateEmailByPlunkId(emailId, patch);
+          if (updated) sseEmit("email-updated", { id: updated.id, ...patch });
+        }
       }
       return;
     }
@@ -239,22 +257,27 @@ async function eventsHandler(req: Request, res: Response): Promise<void> {
 
       if (isPermanent) {
         if (emailId) {
+          const existing = await getEmailByPlunkId(emailId);
+          const alreadyBounced = existing?.deliveryStatus === "bounced";
           const patch = {
             deliveryStatus: "bounced",
             bouncedAt: String(event.bouncedAt ?? new Date().toISOString()),
           };
           const updated = await updateEmailByPlunkId(emailId, patch);
           if (updated) sseEmit("email-updated", { id: updated.id, ...patch });
-        }
-        if (contactEmail) {
+
+          if (!alreadyBounced) {
+            if (contactEmail) {
+              await markContactBounced(contactEmail).catch(() => null);
+            }
+            const subject = event.subject ? String(event.subject) : "(unknown subject)";
+            await sendBounceNotification(contactEmail, subject).catch((err) =>
+              logger.warn("Event: bounce notification failed", { action: "event_bounce_notify", error: (err as Error).message })
+            );
+          }
+        } else if (contactEmail) {
           await markContactBounced(contactEmail).catch(() => null);
         }
-
-        // Notify system that the email bounced
-        const subject = event.subject ? String(event.subject) : "(unknown subject)";
-        await sendBounceNotification(contactEmail, subject).catch((err) =>
-          logger.warn("Event: bounce notification failed", { action: "event_bounce_notify", error: (err as Error).message })
-        );
       }
       // Soft bounces: just log — no status change, contact stays subscribed
       return;
@@ -283,6 +306,10 @@ router.post("/events", eventsHandler);
 router.post("/outbound", eventsHandler); // alias for backwards compat
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+function canAdvance(current: string, next: string): boolean {
+  return (STATUS_RANK[next] ?? 0) > (STATUS_RANK[current] ?? 0);
+}
 
 function parseSenderName(header: string): string {
   const match = header.match(/^([^<]+)<[^>]+>/);

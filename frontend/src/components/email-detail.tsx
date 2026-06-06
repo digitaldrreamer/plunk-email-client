@@ -425,7 +425,6 @@ export function EmailDetail() {
       if (!json.success) throw new Error(json.error ?? "Send failed");
 
       setReplyThreatWarning(null);
-      replyToThread(thread.id, html || plain);
       setReplyOpen(false);
     } catch (err) {
       setReplyError(err instanceof Error ? err.message : "Send failed");

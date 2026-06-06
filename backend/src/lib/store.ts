@@ -2,6 +2,17 @@ import { eq, and, or, like, type SQL } from "drizzle-orm";
 import { db } from "../db";
 import { emails } from "../db/schema";
 
+// Delivery status is a one-way progression — higher rank wins.
+export const STATUS_RANK: Record<string, number> = {
+  pending: 0,
+  sent: 1,
+  delivered: 2,
+  opened: 3,
+  clicked: 4,
+  bounced: 5,
+  complained: 5,
+};
+
 export interface StoredEmail {
   id: string;
   messageId: string;
@@ -106,8 +117,9 @@ export async function getEmailByPlunkId(plunkEmailId: string): Promise<StoredEma
   return row ? rowToEmail(row) : undefined;
 }
 
-export async function addEmail(email: StoredEmail): Promise<void> {
-  await db.insert(emails).values({
+// Returns true if the email was inserted, false if it already existed.
+export async function addEmail(email: StoredEmail): Promise<boolean> {
+  const rows = await db.insert(emails).values({
     id: email.id,
     messageId: email.messageId,
     threadId: email.threadId,
@@ -134,7 +146,8 @@ export async function addEmail(email: StoredEmail): Promise<void> {
     firstOpenedAt: email.firstOpenedAt ?? null,
     firstClickedAt: email.firstClickedAt ?? null,
     bouncedAt: email.bouncedAt ?? null,
-  }).onConflictDoNothing({ target: emails.messageId });
+  }).onConflictDoNothing({ target: emails.messageId }).returning({ id: emails.id });
+  return rows.length > 0;
 }
 
 export async function updateEmail(id: string, patch: Partial<StoredEmail>): Promise<StoredEmail | undefined> {

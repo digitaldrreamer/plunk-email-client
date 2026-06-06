@@ -16,8 +16,11 @@ export function useEmailStream() {
   useEffect(() => {
     if (!user) return;
 
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let active = true;
+
     const connect = () => {
-      // Same-origin request — Next.js proxies to backend, cookies sent automatically
+      if (!active) return;
       const es = new EventSource(`/api/emails/stream`, { withCredentials: true });
       esRef.current = es;
 
@@ -51,15 +54,17 @@ export function useEmailStream() {
       es.onerror = () => {
         es.close();
         esRef.current = null;
-        // Auto-reconnect after 5 s — EventSource usually handles this itself,
-        // but we manually reconnect to ensure it works after longer gaps
-        setTimeout(connect, 5_000);
+        if (active) {
+          reconnectTimer = setTimeout(connect, 5_000);
+        }
       };
     };
 
     connect();
 
     return () => {
+      active = false;
+      if (reconnectTimer !== null) clearTimeout(reconnectTimer);
       esRef.current?.close();
       esRef.current = null;
     };
