@@ -400,7 +400,7 @@ function TeamContent() {
                               </span>
                             )}
                             {u.twoFactorEnabled && (
-                              <ShieldIcon className="size-3.5 text-emerald-500" title="2FA enabled" />
+                              <ShieldIcon className="size-3.5 text-emerald-500" aria-label="2FA enabled" />
                             )}
                             <Badge
                               variant="outline"
