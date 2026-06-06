@@ -1,24 +1,73 @@
 "use client";
 
 import { create } from "zustand";
-import { EMAILS, ME, type Email, type Contact, type Folder, type Category } from "@/data/emails";
-import { TAGS, type Tag } from "@/data/tags";
+import { type Email, type Contact, type Folder, type Category } from "@/data/emails";
+import { useAuthStore } from "./auth-store";
+import { apiUrl } from "@/lib/api";
 
-// ── Thread type (derived, never stored) ─────────────────────────────────────
+// ── Tag type ───────────────────────────────────────────────────────────────────
+
+export interface Tag {
+  id: string;
+  name: string;
+  color: string;
+  bgClass: string;
+  textClass: string;
+  dotClass: string;
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
+function getToken() {
+  return useAuthStore.getState().token;
+}
+
+function getMe(): Contact {
+  const user = useAuthStore.getState().user;
+  return { name: user?.name ?? "Me", email: user?.email ?? "" };
+}
+
+const COLOR_MAP: Record<string, { bgClass: string; textClass: string; dotClass: string }> = {
+  blue:   { bgClass: "bg-blue-100 dark:bg-blue-950/40",   textClass: "text-blue-700 dark:text-blue-400",   dotClass: "bg-blue-500" },
+  green:  { bgClass: "bg-green-100 dark:bg-green-950/40", textClass: "text-green-700 dark:text-green-400", dotClass: "bg-green-500" },
+  red:    { bgClass: "bg-red-100 dark:bg-red-950/40",     textClass: "text-red-700 dark:text-red-400",     dotClass: "bg-red-500" },
+  orange: { bgClass: "bg-orange-100 dark:bg-orange-950/40", textClass: "text-orange-700 dark:text-orange-400", dotClass: "bg-orange-500" },
+  purple: { bgClass: "bg-purple-100 dark:bg-purple-950/40", textClass: "text-purple-700 dark:text-purple-400", dotClass: "bg-purple-500" },
+  pink:   { bgClass: "bg-pink-100 dark:bg-pink-950/40",   textClass: "text-pink-700 dark:text-pink-400",   dotClass: "bg-pink-500" },
+  cyan:   { bgClass: "bg-cyan-100 dark:bg-cyan-950/40",   textClass: "text-cyan-700 dark:text-cyan-400",   dotClass: "bg-cyan-500" },
+  yellow: { bgClass: "bg-yellow-100 dark:bg-yellow-950/40", textClass: "text-yellow-700 dark:text-yellow-400", dotClass: "bg-yellow-500" },
+};
+
+function colorToClasses(color: string) {
+  return COLOR_MAP[color] ?? COLOR_MAP.blue;
+}
+
+async function apiReq(path: string, opts: RequestInit = {}) {
+  const token = getToken();
+  return fetch(apiUrl(path), {
+    ...opts,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...((opts.headers as Record<string, string>) ?? {}),
+    },
+  });
+}
+
+// ── Thread type ────────────────────────────────────────────────────────────────
 
 export interface Thread {
   id: string;
   subject: string;
-  emails: Email[]; // sorted ASC by date
+  emails: Email[];
   latestEmail: Email;
-  participants: Contact[]; // unique senders, in first-appearance order
+  participants: Contact[];
   unreadCount: number;
   isStarred: boolean;
   folder: Folder;
   category: Category;
   tagIds: string[];
   threatUrls: string[];
-  // Delivery tracking — from the last sent email in the thread
   deliveryStatus?: string;
   openCount: number;
   clickCount: number;
@@ -30,11 +79,9 @@ function buildThread(threadId: string, emails: Email[]): Thread {
   );
   const latestEmail = sorted[sorted.length - 1];
 
-  // Folder/category from the latest non-sent, non-draft email
   const anchors = sorted.filter((e) => e.folder !== "sent" && e.folder !== "drafts");
   const anchor = anchors[anchors.length - 1] ?? sorted[0];
 
-  // Unique participants (preserving order; exclude "me@reclear.io" from display)
   const seen = new Set<string>();
   const participants: Contact[] = [];
   for (const email of sorted) {
@@ -67,19 +114,26 @@ function buildThread(threadId: string, emails: Email[]): Thread {
   };
 }
 
-// ── Store ─────────────────────────────────────────────────────────────────────
+// ── Store ──────────────────────────────────────────────────────────────────────
 
 type Filter = "all" | "unread" | "starred";
 
 interface EmailStore {
   emails: Email[];
   tags: Tag[];
+  loading: boolean;
   selectedThreadId: string | null;
   currentFolder: Folder;
   currentCategory: Category;
   filter: Filter;
   activeTagFilter: string | null;
   composing: boolean;
+  signature: string;
+
+  // API
+  loadEmails: () => Promise<void>;
+  loadTags: () => Promise<void>;
+  getTagById: (id: string) => Tag | undefined;
 
   // Derived
   visibleThreads: () => Thread[];
@@ -93,40 +147,68 @@ interface EmailStore {
   setFilter: (filter: Filter) => void;
   setTagFilter: (tagId: string | null) => void;
 
-  // Thread-level actions
-  toggleStarThread: (threadId: string) => void;
-  markThreadRead: (threadId: string) => void;
-  markThreadUnread: (threadId: string) => void;
-  moveThread: (threadId: string, folder: Folder) => void;
-  deleteThread: (threadId: string) => void;
-  addTagToThread: (threadId: string, tagId: string) => void;
-  removeTagFromThread: (threadId: string, tagId: string) => void;
+  // Mutations (optimistic + API-backed)
+  toggleStarThread: (threadId: string) => Promise<void>;
+  markThreadRead: (threadId: string) => Promise<void>;
+  markThreadUnread: (threadId: string) => Promise<void>;
+  moveThread: (threadId: string, folder: Folder) => Promise<void>;
+  deleteThread: (threadId: string) => Promise<void>;
+  addTagToThread: (threadId: string, tagId: string) => Promise<void>;
+  removeTagFromThread: (threadId: string, tagId: string) => Promise<void>;
   replyToThread: (threadId: string, body: string) => void;
 
   // UI
   setComposing: (v: boolean) => void;
-  addUserTag: (name: string, color: string) => void;
-
-  // Signature
-  signature: string;
+  addUserTag: (name: string, color: string) => Promise<void>;
   setSignature: (sig: string) => void;
 }
 
 export const useEmailStore = create<EmailStore>((set, get) => ({
-  emails: EMAILS,
-  tags: TAGS,
+  emails: [],
+  tags: [],
+  loading: false,
   selectedThreadId: null,
   currentFolder: "inbox",
   currentCategory: "primary",
   filter: "all",
   activeTagFilter: null,
   composing: false,
-  signature: "<p>—</p><p>Me · me@reclear.io</p>",
+  signature: "<p>—</p>",
+
+  // ── API loading ──────────────────────────────────────────────────────────────
+
+  loadEmails: async () => {
+    set({ loading: true });
+    try {
+      const res = await apiReq("/api/emails");
+      const json = await res.json() as { success: boolean; data: Email[] };
+      if (json.success) set({ emails: json.data });
+    } catch {
+      // silently fail — store stays empty
+    } finally {
+      set({ loading: false });
+    }
+  },
+
+  loadTags: async () => {
+    try {
+      const res = await apiReq("/api/tags");
+      const raw = await res.json() as { id: string; name: string; color: string }[];
+      if (Array.isArray(raw)) {
+        set({ tags: raw.map((t) => ({ ...t, ...colorToClasses(t.color) })) });
+      }
+    } catch {
+      // silently fail
+    }
+  },
+
+  getTagById: (id) => get().tags.find((t) => t.id === id),
+
+  // ── Derived ──────────────────────────────────────────────────────────────────
 
   visibleThreads: () => {
     const { emails, currentFolder, currentCategory, filter, activeTagFilter } = get();
 
-    // Group all emails by threadId
     const groups = new Map<string, Email[]>();
     for (const email of emails) {
       const group = groups.get(email.threadId) ?? [];
@@ -134,7 +216,6 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
       groups.set(email.threadId, group);
     }
 
-    // Build and filter threads
     let threads = [...groups.entries()].map(([id, grp]) => buildThread(id, grp));
 
     threads = threads.filter((t) => t.folder === currentFolder);
@@ -151,35 +232,34 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
   },
 
   getThread: (id) => {
-    const { emails } = get();
-    const grp = emails.filter((e) => e.threadId === id);
+    const grp = get().emails.filter((e) => e.threadId === id);
     if (!grp.length) return undefined;
     return buildThread(id, grp);
   },
 
   unreadCount: (folder, category) => {
     const { emails } = get();
-    // Count unread threads (not emails) — matches Gmail-style badge numbers
-    const threadsSeen = new Set<string>();
     const threadsUnread = new Set<string>();
     emails
       .filter((e) => e.folder === folder && (category ? e.category === category : true))
-      .forEach((e) => {
-        threadsSeen.add(e.threadId);
-        if (!e.read) threadsUnread.add(e.threadId);
-      });
+      .forEach((e) => { if (!e.read) threadsUnread.add(e.threadId); });
     return threadsUnread.size;
   },
 
-  selectThread: (id) =>
-    set((state) => {
-      if (!id) return { selectedThreadId: null };
-      // Mark all emails in thread as read
-      const updatedEmails = state.emails.map((e) =>
-        e.threadId === id ? { ...e, read: true } : e
-      );
-      return { selectedThreadId: id, emails: updatedEmails };
-    }),
+  // ── Navigation ───────────────────────────────────────────────────────────────
+
+  selectThread: (id) => {
+    if (!id) { set({ selectedThreadId: null }); return; }
+    const unread = get().emails.filter((e) => e.threadId === id && !e.read);
+    set((state) => ({
+      selectedThreadId: id,
+      emails: state.emails.map((e) => e.threadId === id ? { ...e, read: true } : e),
+    }));
+    // Background sync
+    Promise.all(
+      unread.map((e) => apiReq(`/api/emails/${e.id}/read`, { method: "PATCH", body: JSON.stringify({ read: true }) }))
+    ).catch(() => null);
+  },
 
   setFolder: (folder) =>
     set({ currentFolder: folder, selectedThreadId: null, filter: "all", activeTagFilter: null }),
@@ -191,87 +271,112 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
 
   setTagFilter: (tagId) => set({ activeTagFilter: tagId, selectedThreadId: null }),
 
-  toggleStarThread: (threadId) =>
-    set((state) => {
-      const inThread = state.emails.filter((e) => e.threadId === threadId);
-      const allStarred = inThread.every((e) => e.starred);
-      return {
-        emails: state.emails.map((e) =>
-          e.threadId === threadId ? { ...e, starred: !allStarred } : e
-        ),
-      };
-    }),
+  // ── Mutations ────────────────────────────────────────────────────────────────
 
-  markThreadRead: (threadId) =>
+  toggleStarThread: async (threadId) => {
+    const inThread = get().emails.filter((e) => e.threadId === threadId);
+    const allStarred = inThread.every((e) => e.starred);
+    const target = !allStarred;
     set((state) => ({
-      emails: state.emails.map((e) =>
-        e.threadId === threadId ? { ...e, read: true } : e
-      ),
-    })),
+      emails: state.emails.map((e) => e.threadId === threadId ? { ...e, starred: target } : e),
+    }));
+    const toToggle = inThread.filter((e) => e.starred !== target);
+    await Promise.all(toToggle.map((e) => apiReq(`/api/emails/${e.id}/star`, { method: "PATCH" }))).catch(() => null);
+  },
 
-  markThreadUnread: (threadId) =>
+  markThreadRead: async (threadId) => {
+    const unread = get().emails.filter((e) => e.threadId === threadId && !e.read);
     set((state) => ({
-      // Mark only the latest email as unread (Gmail behaviour)
-      emails: (() => {
-        const latest = state.emails
-          .filter((e) => e.threadId === threadId)
-          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
-        return state.emails.map((e) =>
-          e.id === latest?.id ? { ...e, read: false } : e
-        );
-      })(),
-    })),
+      emails: state.emails.map((e) => e.threadId === threadId ? { ...e, read: true } : e),
+    }));
+    await Promise.all(
+      unread.map((e) => apiReq(`/api/emails/${e.id}/read`, { method: "PATCH", body: JSON.stringify({ read: true }) }))
+    ).catch(() => null);
+  },
 
-  moveThread: (threadId, folder) =>
+  markThreadUnread: async (threadId) => {
+    const latest = get().emails
+      .filter((e) => e.threadId === threadId)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+    if (!latest) return;
     set((state) => ({
-      emails: state.emails.map((e) => (e.threadId === threadId ? { ...e, folder } : e)),
-      selectedThreadId:
-        state.selectedThreadId === threadId ? null : state.selectedThreadId,
-    })),
+      emails: state.emails.map((e) => e.id === latest.id ? { ...e, read: false } : e),
+    }));
+    await apiReq(`/api/emails/${latest.id}/read`, { method: "PATCH", body: JSON.stringify({ read: false }) }).catch(() => null);
+  },
 
-  deleteThread: (threadId) =>
+  moveThread: async (threadId, folder) => {
+    const inThread = get().emails.filter((e) => e.threadId === threadId);
     set((state) => ({
-      emails: state.emails.map((e) =>
-        e.threadId === threadId ? { ...e, folder: "trash" as Folder } : e
-      ),
-      selectedThreadId:
-        state.selectedThreadId === threadId ? null : state.selectedThreadId,
-    })),
+      emails: state.emails.map((e) => e.threadId === threadId ? { ...e, folder } : e),
+      selectedThreadId: state.selectedThreadId === threadId ? null : state.selectedThreadId,
+    }));
+    await Promise.all(
+      inThread.map((e) => apiReq(`/api/emails/${e.id}/move`, { method: "PATCH", body: JSON.stringify({ folder }) }))
+    ).catch(() => null);
+  },
 
-  addTagToThread: (threadId, tagId) =>
+  deleteThread: async (threadId) => {
+    const inThread = get().emails.filter((e) => e.threadId === threadId);
+    set((state) => ({
+      emails: state.emails.map((e) => e.threadId === threadId ? { ...e, folder: "trash" as Folder } : e),
+      selectedThreadId: state.selectedThreadId === threadId ? null : state.selectedThreadId,
+    }));
+    await Promise.all(
+      inThread.map((e) => apiReq(`/api/emails/${e.id}/move`, { method: "PATCH", body: JSON.stringify({ folder: "trash" }) }))
+    ).catch(() => null);
+  },
+
+  addTagToThread: async (threadId, tagId) => {
+    const inThread = get().emails.filter((e) => e.threadId === threadId);
     set((state) => ({
       emails: state.emails.map((e) =>
         e.threadId === threadId && !e.tagIds.includes(tagId)
           ? { ...e, tagIds: [...e.tagIds, tagId] }
           : e
       ),
-    })),
+    }));
+    await Promise.all(
+      inThread
+        .filter((e) => !e.tagIds.includes(tagId))
+        .map((e) => apiReq(`/api/emails/${e.id}/tags`, {
+          method: "PATCH",
+          body: JSON.stringify({ tagIds: [...e.tagIds, tagId] }),
+        }))
+    ).catch(() => null);
+  },
 
-  removeTagFromThread: (threadId, tagId) =>
+  removeTagFromThread: async (threadId, tagId) => {
+    const inThread = get().emails.filter((e) => e.threadId === threadId);
     set((state) => ({
       emails: state.emails.map((e) =>
         e.threadId === threadId ? { ...e, tagIds: e.tagIds.filter((t) => t !== tagId) } : e
       ),
-    })),
+    }));
+    await Promise.all(
+      inThread.map((e) => apiReq(`/api/emails/${e.id}/tags`, {
+        method: "PATCH",
+        body: JSON.stringify({ tagIds: e.tagIds.filter((t) => t !== tagId) }),
+      }))
+    ).catch(() => null);
+  },
 
-  replyToThread: (threadId, body) =>
+  replyToThread: (threadId, body) => {
     set((state) => {
       const thread = state.emails.filter((e) => e.threadId === threadId);
       if (!thread.length) return {};
-
       const original = [...thread].sort(
         (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
       )[0];
-
-      // Find the last non-me sender to reply to
+      const me = getMe();
       const lastOther = [...thread]
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-        .find((e) => e.from.email !== ME.email);
+        .find((e) => e.from.email !== me.email);
 
       const replyEmail: Email = {
         id: `reply-${Date.now()}`,
         threadId,
-        from: ME,
+        from: me,
         to: lastOther ? [{ name: lastOther.from.name, email: lastOther.from.email }] : original.to,
         subject: original.subject.startsWith("Re:") ? original.subject : `Re: ${original.subject}`,
         preview: body.slice(0, 120),
@@ -283,30 +388,28 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
         category: original.category,
         tagIds: [],
       };
-
       return { emails: [...state.emails, replyEmail] };
-    }),
+    });
+  },
+
+  // ── UI ───────────────────────────────────────────────────────────────────────
 
   setComposing: (v) => set({ composing: v }),
   setSignature: (sig) => set({ signature: sig }),
 
-  addUserTag: (name, color) =>
-    set((state) => {
-      const id = name.toLowerCase().replace(/\s+/g, "-");
-      if (state.tags.find((t) => t.id === id)) return {};
-      const colorMap: Record<string, { bg: string; text: string; dot: string }> = {
-        blue:   { bg: "bg-blue-100 dark:bg-blue-950/40",   text: "text-blue-700 dark:text-blue-400",   dot: "bg-blue-500" },
-        green:  { bg: "bg-green-100 dark:bg-green-950/40", text: "text-green-700 dark:text-green-400", dot: "bg-green-500" },
-        red:    { bg: "bg-red-100 dark:bg-red-950/40",     text: "text-red-700 dark:text-red-400",     dot: "bg-red-500" },
-        orange: { bg: "bg-orange-100 dark:bg-orange-950/40", text: "text-orange-700 dark:text-orange-400", dot: "bg-orange-500" },
-        purple: { bg: "bg-purple-100 dark:bg-purple-950/40", text: "text-purple-700 dark:text-purple-400", dot: "bg-purple-500" },
-        pink:   { bg: "bg-pink-100 dark:bg-pink-950/40",   text: "text-pink-700 dark:text-pink-400",   dot: "bg-pink-500" },
-        cyan:   { bg: "bg-cyan-100 dark:bg-cyan-950/40",   text: "text-cyan-700 dark:text-cyan-400",   dot: "bg-cyan-500" },
-        yellow: { bg: "bg-yellow-100 dark:bg-yellow-950/40", text: "text-yellow-700 dark:text-yellow-400", dot: "bg-yellow-500" },
-      };
-      const c = colorMap[color] ?? colorMap.blue;
-      return {
-        tags: [...state.tags, { id, name, color, bgClass: c.bg, textClass: c.text, dotClass: c.dot }],
-      };
-    }),
+  addUserTag: async (name, color) => {
+    const id = name.toLowerCase().replace(/\s+/g, "-");
+    if (get().tags.find((t) => t.id === id)) return;
+    const classes = colorToClasses(color);
+    // Optimistic
+    set((state) => ({
+      tags: [...state.tags, { id, name, color, ...classes }],
+    }));
+    try {
+      await apiReq("/api/tags", { method: "POST", body: JSON.stringify({ name, color }) });
+    } catch {
+      // rollback on failure
+      set((state) => ({ tags: state.tags.filter((t) => t.id !== id) }));
+    }
+  },
 }));

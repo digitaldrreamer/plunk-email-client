@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { ChevronLeftIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Sidebar } from "@/components/sidebar";
@@ -21,8 +21,13 @@ import { useDocumentTitle } from "@/hooks/use-document-title";
 type AppView = "email" | "contacts";
 
 export function EmailClient() {
-  const { selectedThreadId, selectThread } = useEmailStore();
+  const { selectedThreadId, selectThread, loadEmails, loadTags } = useEmailStore();
   useDocumentTitle();
+
+  useEffect(() => {
+    loadTags();
+    loadEmails();
+  }, []);
 
   const [appView, setAppView] = useState<AppView>("email");
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -73,10 +78,7 @@ export function EmailClient() {
               {/* Mobile top bar */}
               <div className="flex items-center justify-between border-b border-border px-4 h-14 md:hidden bg-sidebar shrink-0">
                 <div className="flex items-center gap-2">
-                  <div className="flex size-6 items-center justify-center rounded-md bg-primary">
-                    <span className="text-[10px] font-bold text-primary-foreground">R</span>
-                  </div>
-                  <span className="text-sm font-semibold tracking-tight">reclear</span>
+                  <img src="/logo_transparent.png" alt="reclear" className="h-6 w-auto" />
                 </div>
               </div>
 
