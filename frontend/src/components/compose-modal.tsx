@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useRef, useState, useMemo, useCallback, useEffect, KeyboardEvent } from "react";
-import { XIcon, SendIcon, PaperclipIcon, MinimizeIcon, SaveIcon, LoaderIcon, ShieldAlertIcon, RotateCcwIcon, SparklesIcon, SpellCheckIcon } from "lucide-react";
+import { XIcon, SendIcon, PaperclipIcon, MinimizeIcon, Maximize2Icon, Minimize2Icon, SaveIcon, LoaderIcon, ShieldAlertIcon, RotateCcwIcon, SparklesIcon, SpellCheckIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -200,11 +200,13 @@ function clearDraft() {
 }
 
 export function ComposeModal() {
-  const { composing, setComposing, signature, loadEmails } = useEmailStore();
+  const { composing, setComposing, composeDraft, clearComposeDraft, signature, loadEmails } = useEmailStore();
   const [minimized, setMinimized] = useState(false);
-  // Lazy init from localStorage so the editor gets the right initialHtml on mount
-  const [recipients, setRecipients] = useState<string[]>(() => loadDraft()?.recipients ?? []);
-  const [subject, setSubject] = useState<string>(() => loadDraft()?.subject ?? "");
+  const [fullscreen, setFullscreen] = useState(false);
+  const [currentDraftId, setCurrentDraftId] = useState<string | null>(null);
+  // Prefer composeDraft (opening a saved draft) over localStorage auto-save
+  const [recipients, setRecipients] = useState<string[]>(() => composeDraft?.to ?? loadDraft()?.recipients ?? []);
+  const [subject, setSubject] = useState<string>(() => composeDraft?.subject ?? loadDraft()?.subject ?? "");
   const [hasDraft, setHasDraft] = useState(() => loadDraft() !== null);
   const [attachments, setAttachments] = useState<File[]>([]);
   const [sending, setSending] = useState(false);
@@ -213,7 +215,16 @@ export function ComposeModal() {
   const [threatWarning, setThreatWarning] = useState<{ threats: { url: string; threatTypes: string[] }[] } | null>(null);
   const editorRef = useRef<EmailEditorRef>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const bodyRef = useRef<string>(loadDraft()?.body ?? "");
+  const bodyRef = useRef<string>(composeDraft?.body ?? loadDraft()?.body ?? "");
+
+  // When opened from a saved draft, track its ID
+  useEffect(() => {
+    if (composeDraft) {
+      setCurrentDraftId(composeDraft.id);
+      clearComposeDraft();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Auto-save recipients/subject on change
   useEffect(() => {
@@ -255,11 +266,13 @@ export function ComposeModal() {
     saveDraft({ recipients, subject, body: bodyRef.current, savedAt: Date.now() });
     setComposing(false);
     setMinimized(false);
+    setFullscreen(false);
     setRecipients([]);
     setSubject("");
     setAttachments([]);
     setError("");
     setHasDraft(false);
+    setCurrentDraftId(null);
   };
 
   const handleAiCompose = async () => {
@@ -358,22 +371,35 @@ export function ComposeModal() {
     const body = editorRef.current?.getHtml() ?? bodyRef.current;
     saveDraft({ recipients, subject, body, savedAt: Date.now() });
     try {
-      await fetch("/api/emails/draft", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ to: recipients, subject, body }),
-      });
+      if (currentDraftId) {
+        await fetch(`/api/emails/draft/${currentDraftId}`, {
+          method: "PATCH",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ to: recipients, subject, body }),
+        });
+      } else {
+        const res = await fetch("/api/emails/draft", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ to: recipients, subject, body }),
+        });
+        const json = await res.json();
+        if (json?.data?.id) setCurrentDraftId(json.data.id);
+      }
       loadEmails();
     } catch { /* non-fatal — localStorage draft still saved */ }
     toast("Draft saved", { duration: 2000 });
     setComposing(false);
     setMinimized(false);
+    setFullscreen(false);
     setRecipients([]);
     setSubject("");
     setAttachments([]);
     setError("");
     setHasDraft(false);
+    setCurrentDraftId(null);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -425,30 +451,46 @@ export function ComposeModal() {
 
     <div
       className={cn(
-        "fixed bottom-0 right-4 z-50 w-[540px] max-w-[calc(100vw-2rem)] rounded-t-xl border border-border bg-card shadow-2xl transition-all duration-200",
-        minimized && "h-12 overflow-hidden"
+        "fixed z-50 flex flex-col bg-card border border-border shadow-2xl transition-all duration-200",
+        fullscreen
+          ? "inset-4 rounded-xl"
+          : "bottom-0 right-4 w-[540px] max-w-[calc(100vw-2rem)] rounded-t-xl",
+        minimized && !fullscreen && "h-12 overflow-hidden"
       )}
     >
       {/* Header */}
       <div
-        className="flex h-12 items-center justify-between gap-2 rounded-t-xl bg-primary px-4 cursor-pointer select-none"
-        onClick={() => setMinimized((v) => !v)}
+        className="flex h-12 shrink-0 items-center justify-between gap-2 rounded-t-xl bg-primary px-4 cursor-pointer select-none"
+        onClick={() => { if (!fullscreen) setMinimized((v) => !v); }}
       >
         <span className="text-sm font-medium text-primary-foreground truncate">
           {subject || "New message"}
         </span>
-        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center" onClick={(e) => e.stopPropagation()}>
+          {!fullscreen && (
+            <Button
+              variant="ghost" size="icon-xs"
+              className="text-primary-foreground/80 hover:text-primary-foreground hover:bg-white/10"
+              onClick={() => setMinimized((v) => !v)}
+              title={minimized ? "Expand" : "Minimize"}
+            >
+              <MinimizeIcon className="size-3.5" />
+            </Button>
+          )}
           <Button
             variant="ghost" size="icon-xs"
-            className="text-primary-foreground/80 hover:text-primary-foreground hover:bg-white/10"
-            onClick={() => setMinimized((v) => !v)}
+            className="text-primary-foreground/80 hover:text-primary-foreground hover:bg-white/10 ml-0.5"
+            onClick={() => { setFullscreen((v) => !v); setMinimized(false); }}
+            title={fullscreen ? "Restore" : "Fullscreen"}
           >
-            <MinimizeIcon className="size-3.5" />
+            {fullscreen ? <Minimize2Icon className="size-3.5" /> : <Maximize2Icon className="size-3.5" />}
           </Button>
+          <div className="w-px h-4 bg-white/20 mx-1.5" />
           <Button
             variant="ghost" size="icon-xs"
             className="text-primary-foreground/80 hover:text-primary-foreground hover:bg-white/10"
             onClick={handleClose}
+            title="Close"
           >
             <XIcon className="size-3.5" />
           </Button>
@@ -456,7 +498,7 @@ export function ComposeModal() {
       </div>
 
       {/* Body */}
-      <div className="flex flex-col">
+      <div className={cn("flex flex-col", fullscreen && "flex-1 overflow-hidden")}>
         {/* Recipients */}
         <RecipientInput recipients={recipients} onChange={setRecipients} />
 
@@ -491,9 +533,9 @@ export function ComposeModal() {
           placeholder="Write your message…"
           initialHtml={initialHtml}
           onChange={handleBodyChange}
-          minHeight="200px"
+          minHeight={fullscreen ? undefined : "200px"}
           autoFocus
-          className="rounded-none border-0 border-b border-border shadow-none"
+          className={cn("rounded-none border-0 border-b border-border shadow-none", fullscreen && "flex-1")}
         />
 
         {/* Attachment chips */}

@@ -9,6 +9,7 @@ export interface AuthUser {
   email: string;
   role: "admin" | "user";
   recoveryEmail?: string | null;
+  signature?: string | null;
 }
 
 interface AuthStore {

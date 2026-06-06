@@ -56,9 +56,12 @@ export function SettingsModal({
 
   // ── Signature ────────────────────────────────────────────────────────────────
 
-  const handleSaveSignature = () => {
+  const handleSaveSignature = async () => {
     const html = editorRef.current?.getHtml() ?? "";
     setSignature(html);
+    try {
+      await apiFetch("/api/auth/me", { method: "PATCH", body: JSON.stringify({ signature: html }) });
+    } catch { /* non-fatal */ }
     toast.success("Signature saved");
   };
 

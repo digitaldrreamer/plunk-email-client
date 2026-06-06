@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useAuthStore } from "@/store/auth-store";
+import { useEmailStore } from "@/store/email-store";
 import { LoginForm } from "@/components/login-form";
 import { apiFetch } from "@/lib/api";
 import type { AuthUser } from "@/store/auth-store";
@@ -11,11 +12,15 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   const sessionChecked = useAuthStore((s) => s._sessionChecked);
   const setUser = useAuthStore((s) => s.setUser);
   const markChecked = useAuthStore((s) => s._markSessionChecked);
+  const setSignature = useEmailStore((s) => s.setSignature);
 
   useEffect(() => {
-    // Verify the HttpOnly cookie session with the server on every page load
     apiFetch<AuthUser>("/api/auth/me")
-      .then((u) => { setUser(u); markChecked(); })
+      .then((u) => {
+        setUser(u);
+        if (u.signature != null) setSignature(u.signature);
+        markChecked();
+      })
       .catch(() => { setUser(null); markChecked(); });
   }, []);
 

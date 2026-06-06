@@ -20,6 +20,7 @@ export const users = pgTable("users", {
   resetToken: text("reset_token"),           // SHA-256 hash of the raw token
   resetTokenExpiresAt: text("reset_token_expires_at"),
   twoFactorBackupCodes: text("two_factor_backup_codes"), // JSON array of SHA-256 hashed backup codes
+  signature: text("signature"),
 });
 
 export const emails = pgTable("emails", {

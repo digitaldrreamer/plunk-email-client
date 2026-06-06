@@ -123,6 +123,7 @@ interface EmailStore {
   filter: Filter;
   activeTagFilter: string | null;
   composing: boolean;
+  composeDraft: { id: string; to: string[]; subject: string; body: string } | null;
   signature: string;
 
   // API
@@ -154,6 +155,8 @@ interface EmailStore {
 
   // UI
   setComposing: (v: boolean) => void;
+  openDraft: (draft: { id: string; to: string[]; subject: string; body: string }) => void;
+  clearComposeDraft: () => void;
   addUserTag: (name: string, color: string) => Promise<void>;
   setSignature: (sig: string) => void;
 
@@ -173,6 +176,7 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
   filter: "all",
   activeTagFilter: null,
   composing: false,
+  composeDraft: null,
   signature: "<p>—</p>",
 
   // ── API loading ──────────────────────────────────────────────────────────────
@@ -395,6 +399,8 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
   // ── UI ───────────────────────────────────────────────────────────────────────
 
   setComposing: (v) => set({ composing: v }),
+  openDraft: (draft) => set({ composeDraft: draft, composing: true }),
+  clearComposeDraft: () => set({ composeDraft: null }),
   setSignature: (sig) => set({ signature: sig }),
 
   addEmail: (email) => {

@@ -129,7 +129,7 @@ router.post("/2fa/verify", loginLimiter, async (req, res) => {
     const codeHash = crypto.createHash("sha256").update(code.toUpperCase().replace(/\s/g, "")).digest("hex");
     const idx = storedHashes.indexOf(codeHash);
     if (idx === -1) {
-      logger.warn("2FA verify failed: bad code", { action: "2fa_verify", userId, ip: req.ip });
+      logger.warn("2FA verify failed: bad code", { action: "2fa_verify", userId, ip: req.ip, secretLen: user.twoFactorSecret.length, codeLen: code.length });
       return res.status(401).json({ success: false, error: "Incorrect code. Try again." });
     }
     storedHashes.splice(idx, 1);
@@ -237,16 +237,17 @@ router.get("/me", requireAuth, async (req, res) => {
     data: {
       id: user.id, name: user.name, email: user.email, role: user.role,
       recoveryEmail: user.recoveryEmail, lastLoginAt: user.lastLoginAt,
-      twoFactorEnabled: user.twoFactorEnabled,
+      twoFactorEnabled: user.twoFactorEnabled, signature: user.signature ?? "",
     },
   });
 });
 
 router.patch("/me", requireAuth, async (req, res) => {
-  const { name, recoveryEmail } = req.body as { name?: string; recoveryEmail?: string };
+  const { name, recoveryEmail, signature } = req.body as { name?: string; recoveryEmail?: string; signature?: string };
   const patch: Record<string, unknown> = { updatedAt: new Date().toISOString() };
   if (name?.trim()) patch.name = name.trim();
   if (recoveryEmail !== undefined) patch.recoveryEmail = recoveryEmail || null;
+  if (signature !== undefined) patch.signature = signature;
   await db.update(users).set(patch).where(eq(users.id, req.user!.sub));
   res.json({ success: true });
 });
@@ -309,8 +310,15 @@ router.post("/2fa/enable", requireAuth, async (req, res) => {
   if (user.twoFactorEnabled) {
     return res.status(400).json({ success: false, error: "2FA already enabled" });
   }
-  if (!(await verifyTotp(code, user.twoFactorSecret))) {
-    logger.warn("2FA enable: bad code", { action: "2fa_enable", userId: req.user!.sub, ip: req.ip });
+  const totpOk = await verifyTotp(code, user.twoFactorSecret);
+  if (!totpOk) {
+    logger.warn("2FA enable: bad code", {
+      action: "2fa_enable",
+      userId: req.user!.sub,
+      ip: req.ip,
+      secretLen: user.twoFactorSecret.length,
+      codeLen: code.length,
+    });
     return res.status(400).json({ success: false, error: "Incorrect code. Check your authenticator and try again." });
   }
 

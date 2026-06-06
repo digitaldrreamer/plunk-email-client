@@ -83,6 +83,24 @@ router.post("/draft", async (req, res) => {
   res.status(201).json({ success: true, data: draft });
 });
 
+// ── Update draft ─────────────────────────────────────────────────────────────
+
+router.patch("/draft/:id", async (req, res) => {
+  const { id } = req.params;
+  const { to, subject, body } = req.body as { to?: string[]; subject?: string; body?: string };
+
+  const updated = await updateEmail(id, {
+    to: (to ?? []).map((addr) => ({ name: addr, email: addr })),
+    subject: subject?.trim() || "(no subject)",
+    body: body ?? "",
+    preview: (body ?? "").replace(/<[^>]+>/g, "").slice(0, 120),
+    date: new Date().toISOString(),
+  });
+
+  if (!updated) return res.status(404).json({ success: false, error: "Draft not found" });
+  res.json({ success: true, data: updated });
+});
+
 // ── List ─────────────────────────────────────────────────────────────────────
 
 router.get("/", async (req, res) => {

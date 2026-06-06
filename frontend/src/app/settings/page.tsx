@@ -55,9 +55,12 @@ function SettingsContent() {
 
   // ── Signature ─────────────────────────────────────────────────────────────
 
-  const handleSaveSignature = () => {
+  const handleSaveSignature = async () => {
     const html = editorRef.current?.getHtml() ?? "";
     setSignature(html);
+    try {
+      await apiFetch("/api/auth/me", { method: "PATCH", body: JSON.stringify({ signature: html }) });
+    } catch { /* non-fatal — already saved in store */ }
     toast.success("Signature saved");
   };
 
@@ -438,6 +441,11 @@ function SettingsContent() {
                     <p className="text-xs text-muted-foreground mt-0.5">
                       Use Google Authenticator, Authy, or any TOTP app.
                     </p>
+                  </div>
+
+                  <div className="rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40 px-3.5 py-3 text-xs text-amber-800 dark:text-amber-300 space-y-1">
+                    <p className="font-medium">Before scanning:</p>
+                    <p>If you&apos;ve tried to set up 2FA before, open your authenticator app and delete any existing <strong>Reclear</strong> entries first. Stale entries cause code mismatches.</p>
                   </div>
 
                   <div className="flex justify-center">

@@ -3,6 +3,7 @@ import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import { db } from "./db";
+import { sql } from "drizzle-orm";
 import { tags } from "./db/schema";
 import emailsRouter from "./routes/emails";
 import tagsRouter from "./routes/tags";
@@ -64,6 +65,7 @@ async function seedTags() {
 
 app.listen(PORT, async () => {
   console.log(`reclear-email backend running on http://localhost:${PORT}`);
+  await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS signature text`);
   await seedTags();
 
   if (!process.env.PLUNK_SECRET_KEY) console.warn("⚠  PLUNK_SECRET_KEY not set — email sending will fail");

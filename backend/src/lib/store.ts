@@ -143,6 +143,11 @@ export async function addEmail(email: StoredEmail): Promise<void> {
 
 export async function updateEmail(id: string, patch: Partial<StoredEmail>): Promise<StoredEmail | undefined> {
   const dbPatch: Record<string, unknown> = {};
+  if (patch.subject !== undefined) dbPatch.subject = patch.subject;
+  if (patch.body !== undefined) dbPatch.body = patch.body;
+  if (patch.preview !== undefined) dbPatch.preview = patch.preview;
+  if (patch.date !== undefined) dbPatch.date = patch.date;
+  if (patch.to !== undefined) dbPatch.toJson = JSON.stringify(patch.to);
   if (patch.folder !== undefined) dbPatch.folder = patch.folder;
   if (patch.category !== undefined) dbPatch.category = patch.category;
   if (patch.read !== undefined) dbPatch.read = patch.read;
