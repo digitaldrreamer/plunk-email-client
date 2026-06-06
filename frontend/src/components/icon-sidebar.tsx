@@ -42,7 +42,7 @@ export function IconSidebar() {
       <div className="flex h-full w-[52px] shrink-0 flex-col items-center border-r border-sidebar-border bg-sidebar py-3 gap-1">
         {/* Logo */}
         <div className="flex size-8 items-center justify-center rounded-lg overflow-hidden mb-1">
-          <Image src="/favicon-32x32.png" alt="reclear" width={32} height={32} className="size-8" />
+          <Image src="/logo_transparent.png" alt="reclear" width={32} height={32} className="size-8 object-contain" />
         </div>
 
         {/* Compose */}

@@ -96,8 +96,7 @@ export function Sidebar({ onOpenSettings, onOpenContacts }: { onOpenSettings?: (
       <div className="flex h-full flex-col bg-sidebar border-r border-sidebar-border">
         {/* Logo */}
         <div className="flex h-14 items-center gap-2.5 px-4 border-b border-sidebar-border shrink-0">
-          <Image src="/favicon-32x32.png" alt="reclear" width={28} height={28} className="size-7 rounded-lg" />
-          <span className="font-semibold text-sm tracking-tight text-foreground">reclear</span>
+          <Image src="/logo_transparent.png" alt="reclear" width={96} height={28} className="h-7 w-auto" />
           <div className="ml-auto">
             <ThemeToggle />
           </div>

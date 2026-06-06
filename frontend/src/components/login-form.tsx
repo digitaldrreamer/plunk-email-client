@@ -140,9 +140,8 @@ export function LoginForm() {
       <div className="w-full max-w-sm space-y-6">
         {/* Logo */}
         <div className="flex flex-col items-center gap-3 text-center">
-          <Image src="/favicon-32x32.png" alt="reclear" width={40} height={40} className="size-10 rounded-xl" />
+          <Image src="/logo_transparent.png" alt="reclear" width={120} height={40} className="h-10 w-auto" />
           <div>
-            <h1 className="text-lg font-semibold tracking-tight">reclear</h1>
             <p className="text-sm text-muted-foreground">
               {step === "credentials" && "Sign in to your account"}
               {step === "two-factor" && "Two-factor authentication"}

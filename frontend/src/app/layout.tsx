@@ -3,6 +3,7 @@ import { Inter, Geist } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 const geist = Geist({subsets:['latin'],variable:'--font-sans'});
@@ -27,8 +28,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" suppressHydrationWarning className={cn("font-sans", geist.variable)}>
       <body className={`${geist.variable} font-sans antialiased`} suppressHydrationWarning>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-          {children}
-          <Toaster richColors position="bottom-right" />
+          <TooltipProvider delayDuration={200}>
+            {children}
+            <Toaster richColors position="bottom-right" />
+          </TooltipProvider>
         </ThemeProvider>
       </body>
     </html>
