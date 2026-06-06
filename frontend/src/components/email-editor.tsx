@@ -85,7 +85,9 @@ export const EmailEditor = forwardRef<EmailEditorRef, EmailEditorProps>(
         const editor = editorRef.current;
         if (!editor) return "";
         let html = "";
-        editor.getEditorState().read(() => {
+        // editor.read() sets the active editor context; editorState.read() alone
+        // does not, causing $getEditor() inside createDOM to throw error #337
+        editor.read(() => {
           html = $generateHtmlFromNodes(editor, null);
         });
         return html;
@@ -94,7 +96,7 @@ export const EmailEditor = forwardRef<EmailEditorRef, EmailEditorProps>(
         const editor = editorRef.current;
         if (!editor) return "";
         let text = "";
-        editor.getEditorState().read(() => {
+        editor.read(() => {
           text = $getRoot().getTextContent();
         });
         return text;
@@ -142,9 +144,9 @@ export const EmailEditor = forwardRef<EmailEditorRef, EmailEditorProps>(
     };
 
     const handleChange = useCallback(
-      (editorState: EditorState, editor: LexicalEditor) => {
+      (_editorState: EditorState, editor: LexicalEditor) => {
         if (!onChange) return;
-        editorState.read(() => {
+        editor.read(() => {
           onChange($generateHtmlFromNodes(editor, null));
         });
       },

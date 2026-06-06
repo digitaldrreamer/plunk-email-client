@@ -46,6 +46,42 @@ const upload = multer({
   limits: { files: 10, fileSize: 10 * 1024 * 1024 },
 });
 
+// ── Save draft ───────────────────────────────────────────────────────────────
+
+router.post("/draft", async (req, res) => {
+  const { to, subject, body } = req.body as {
+    to?: string[];
+    subject?: string;
+    body?: string;
+  };
+
+  const id = `draft-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const draft: StoredEmail = {
+    id,
+    messageId: id,
+    threadId: `t-${id}`,
+    from: { name: req.user!.email.split("@")[0], email: req.user!.email },
+    to: (to ?? []).map((addr) => ({ name: addr, email: addr })),
+    subject: subject?.trim() || "(no subject)",
+    body: body ?? "",
+    preview: (body ?? "").replace(/<[^>]+>/g, "").slice(0, 120),
+    date: new Date().toISOString(),
+    folder: "drafts",
+    category: "primary",
+    read: true,
+    starred: false,
+    tagIds: [],
+    hasAttachments: false,
+    threatUrls: [],
+    deliveryStatus: "pending",
+    openCount: 0,
+    clickCount: 0,
+  };
+
+  await addEmail(draft);
+  res.status(201).json({ success: true, data: draft });
+});
+
 // ── List ─────────────────────────────────────────────────────────────────────
 
 router.get("/", async (req, res) => {

@@ -201,7 +201,7 @@ function clearDraft() {
 }
 
 export function ComposeModal() {
-  const { composing, setComposing, signature } = useEmailStore();
+  const { composing, setComposing, signature, loadEmails } = useEmailStore();
   const [minimized, setMinimized] = useState(false);
   // Lazy init from localStorage so the editor gets the right initialHtml on mount
   const [recipients, setRecipients] = useState<string[]>(() => loadDraft()?.recipients ?? []);
@@ -354,8 +354,18 @@ export function ComposeModal() {
   const handleSend = () => doSend(false);
   const handleSendAnyway = () => { setThreatWarning(null); doSend(true); };
 
-  const handleSaveDraft = () => {
-    saveDraft({ recipients, subject, body: bodyRef.current, savedAt: Date.now() });
+  const handleSaveDraft = async () => {
+    const body = editorRef.current?.getHtml() ?? bodyRef.current;
+    saveDraft({ recipients, subject, body, savedAt: Date.now() });
+    try {
+      await fetch(`${BACKEND}/api/emails/draft`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ to: recipients, subject, body }),
+      });
+      loadEmails();
+    } catch { /* non-fatal — localStorage draft still saved */ }
     toast("Draft saved", { duration: 2000 });
     setComposing(false);
     setMinimized(false);
