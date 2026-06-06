@@ -122,7 +122,7 @@ async function main() {
   <p style="color:#6b7280;font-size:13px;margin-top:4px;">You'll be asked to set a new password on your first login.</p>
   <a href="${frontendUrl}" style="display:inline-block;margin-top:16px;background:#111827;color:#fff;text-decoration:none;padding:10px 20px;border-radius:6px;font-size:14px;">Sign in to Reclear →</a>
 </div>`.trim(),
-  }).then(() => true).catch((err) => {
+  }).then((result) => result.success).catch((err) => {
     console.warn("  ⚠  invite email failed:", (err as Error).message);
     return false;
   });
