@@ -45,21 +45,11 @@ router.post("/inbound", async (req, res) => {
       return res.status(200).json({ status: "dropped: missing fields" });
     }
 
-    if (isHardFail(event.spamVerdict as Verdict)) {
-      logger.warn("Inbound: dropped spam verdict", { action: "inbound_drop", reason: "spam_verdict", messageId: event.messageId });
-      return res.status(200).json({ status: "dropped: spam verdict" });
-    }
-    if (isHardFail(event.virusVerdict as Verdict)) {
-      logger.warn("Inbound: dropped virus verdict", { action: "inbound_drop", reason: "virus_verdict", messageId: event.messageId });
-      return res.status(200).json({ status: "dropped: virus verdict" });
-    }
+    const spamByVerdict = isHardFail(event.spamVerdict as Verdict) || isHardFail(event.virusVerdict as Verdict);
 
     const rawForSpam = `From: ${event.fromHeader ?? event.from}\nSubject: ${event.subject}\n\n${event.body ?? ""}`;
-    const score = isTrustedSender(event.from) ? 0 : await postmarkSpamScore(rawForSpam);
-    if (isSpam(score)) {
-      logger.warn("Inbound: dropped by spam score", { action: "inbound_drop", reason: "spam_score", score, messageId: event.messageId });
-      return res.status(200).json({ status: "dropped: spam score", score });
-    }
+    const score = (spamByVerdict || isTrustedSender(event.from)) ? 0 : await postmarkSpamScore(rawForSpam);
+    const spamByScore = isSpam(score);
 
     const senderName = parseSenderName(event.fromHeader ?? event.from);
     const bodyText = htmlToText(event.body ?? "");
@@ -70,10 +60,10 @@ router.post("/inbound", async (req, res) => {
     const threadId = existingThreadId ?? `t-recv-${event.messageId}`;
 
     let category: StoredEmail["category"] = "primary";
-    let folder: StoredEmail["folder"] = "inbox";
+    let folder: StoredEmail["folder"] = (spamByVerdict || spamByScore) ? "spam" : "inbox";
     let tagIds: string[] = [];
 
-    if (process.env.MISTRAL_API_KEY) {
+    if (process.env.MISTRAL_API_KEY && !spamByVerdict && !spamByScore) {
       try {
         const existingTags = await db.select({ id: tags.id, name: tags.name }).from(tags);
         const ai = await categorizeEmail(event.subject, bodyText, existingTags);
@@ -123,6 +113,11 @@ router.post("/inbound", async (req, res) => {
       return res.status(200).json({ status: "ok", duplicate: true });
     }
 
+    if (spamByVerdict) {
+      logger.warn("Inbound: routed to spam by verdict", { action: "inbound_spam", reason: "verdict", emailId, from: event.from });
+    } else if (spamByScore) {
+      logger.warn("Inbound: routed to spam by score", { action: "inbound_spam", reason: "score", score, emailId, from: event.from });
+    }
     sseEmit("new-email", email);
     logger.info("Inbound: email stored", { action: "inbound_stored", emailId, from: event.from, subject: event.subject, category, folder });
 
