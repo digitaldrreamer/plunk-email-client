@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { db } from "../db";
 import { tags } from "../db/schema";
 import { logger, describeError } from "../lib/logger";
-import { addEmail, updateEmail, updateEmailByPlunkId, getEmailByPlunkId, STATUS_RANK, type StoredEmail } from "../lib/store";
+import { addEmail, updateEmail, updateEmailByPlunkId, getEmailByPlunkId, findThreadIdBySubject, STATUS_RANK, type StoredEmail } from "../lib/store";
 import { sseEmit } from "../lib/sse";
 import { isHardFail, postmarkSpamScore, isSpam, type Verdict } from "../lib/spam";
 import { categorizeEmail } from "../lib/mistral";
@@ -64,6 +64,11 @@ router.post("/inbound", async (req, res) => {
     const senderName = parseSenderName(event.fromHeader ?? event.from);
     const bodyText = htmlToText(event.body ?? "");
 
+    // Re-use an existing thread if this is a reply to a known subject
+    const normalizedSubject = event.subject.replace(/^(Re:\s*|Fwd:\s*)+/gi, "").trim();
+    const existingThreadId = await findThreadIdBySubject(normalizedSubject);
+    const threadId = existingThreadId ?? `t-recv-${event.messageId}`;
+
     let category: StoredEmail["category"] = "primary";
     let folder: StoredEmail["folder"] = "inbox";
     let tagIds: string[] = [];
@@ -92,7 +97,7 @@ router.post("/inbound", async (req, res) => {
     const email: StoredEmail = {
       id: emailId,
       messageId: event.messageId,
-      threadId: `t-recv-${event.messageId}`,
+      threadId,
       from: { name: senderName, email: event.from.toLowerCase() },
       to: (event.recipients ?? [event.to]).map((addr: string) => ({ name: addr, email: addr })),
       subject: event.subject,

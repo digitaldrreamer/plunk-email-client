@@ -68,6 +68,28 @@ app.listen(PORT, async () => {
   await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS signature text`);
   await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS invite_expires_at text`);
   await db.execute(sql`ALTER TABLE emails ALTER COLUMN spam_score TYPE real USING spam_score::real`);
+
+  // Merge emails that share the same normalized subject (Re:/Fwd: stripped) into one thread.
+  // Uses the threadId of the earliest email in each subject group as the canonical ID.
+  await db.execute(sql`
+    WITH normalized AS (
+      SELECT id, thread_id, date,
+        regexp_replace(lower(subject), '^(re:\\s*|fwd:\\s*)+', '', 'g') AS base_subject
+      FROM emails
+    ),
+    canonical AS (
+      SELECT DISTINCT ON (base_subject) base_subject, thread_id AS canonical_thread_id
+      FROM normalized
+      ORDER BY base_subject, date ASC
+    )
+    UPDATE emails e
+    SET thread_id = c.canonical_thread_id
+    FROM normalized n
+    JOIN canonical c ON n.base_subject = c.base_subject
+    WHERE e.id = n.id
+      AND e.thread_id != c.canonical_thread_id
+  `);
+
   await seedTags();
 
   if (!process.env.PLUNK_SECRET_KEY) console.warn("⚠  PLUNK_SECRET_KEY not set — email sending will fail");

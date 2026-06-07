@@ -1,4 +1,4 @@
-import { eq, and, or, like, type SQL } from "drizzle-orm";
+import { eq, and, or, like, sql, type SQL } from "drizzle-orm";
 import { db } from "../db";
 import { emails } from "../db/schema";
 
@@ -185,6 +185,17 @@ export async function updateEmailByPlunkId(
   const email = await getEmailByPlunkId(plunkEmailId);
   if (!email) return undefined;
   return updateEmail(email.id, patch);
+}
+
+// Find the threadId of an existing email whose subject (normalized, Re:/Fwd: stripped) matches.
+// Used to group inbound replies into the same thread as the original.
+export async function findThreadIdBySubject(normalizedSubject: string): Promise<string | undefined> {
+  const [row] = await db.select({ threadId: emails.threadId })
+    .from(emails)
+    .where(sql`regexp_replace(lower(${emails.subject}), '^(re:\\s*|fwd:\\s*)+', '', 'g') = ${normalizedSubject.toLowerCase()}`)
+    .orderBy(emails.date)
+    .limit(1);
+  return row?.threadId;
 }
 
 export async function deleteEmail(id: string): Promise<boolean> {
