@@ -305,11 +305,14 @@ router.patch("/:id/star", async (req, res) => {
 // ── Move ──────────────────────────────────────────────────────────────────────
 
 router.patch("/:id/move", async (req, res) => {
-  const { folder } = req.body as { folder?: string };
-  if (!folder) return res.status(400).json({ success: false, error: "folder required" });
-  const updated = await updateEmail(req.params.id, { folder });
+  const { folder, category } = req.body as { folder?: string; category?: string };
+  if (!folder && !category) return res.status(400).json({ success: false, error: "folder or category required" });
+  const patch: Record<string, string> = {};
+  if (folder) patch.folder = folder;
+  if (category) patch.category = category;
+  const updated = await updateEmail(req.params.id, patch);
   if (!updated) return res.status(404).json({ success: false, error: "Not found" });
-  sseEmit("email-updated", { id: updated.id, folder: updated.folder });
+  sseEmit("email-updated", { id: updated.id, folder: updated.folder, category: updated.category });
   res.json({ success: true, data: updated });
 });
 

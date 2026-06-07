@@ -348,18 +348,29 @@ export function EmailList() {
                         : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/40"
                     )}
                   >
-                    <div className="relative">
-                      <Icon className={cn("size-3.5", danger && "text-current")} />
+                    <Icon className={cn("size-3.5", danger && "text-current")} />
+                    <div className="hidden sm:flex items-center gap-1">
+                      <span>{label}</span>
                       {count > 0 && (
                         <span className={cn(
-                          "absolute -top-1 -right-2 size-3.5 flex items-center justify-center rounded-full text-[8px] font-bold text-white",
-                          danger ? "bg-red-500" : "bg-primary"
+                          "flex items-center justify-center rounded-full px-1 min-w-[14px] h-3.5 text-[8px] font-bold leading-none",
+                          danger
+                            ? "bg-red-500 text-white"
+                            : isActive
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-primary text-primary-foreground"
                         )}>
-                          {count > 9 ? "9+" : count}
+                          {count > 99 ? "99+" : count}
                         </span>
                       )}
                     </div>
-                    <span className="hidden sm:block">{label}</span>
+                    {/* mobile: dot indicator for unreads on inactive tabs */}
+                    {count > 0 && (
+                      <span className={cn(
+                        "sm:hidden size-1.5 rounded-full",
+                        danger ? "bg-red-500" : "bg-primary"
+                      )} />
+                    )}
                   </button>
                 );
               })}

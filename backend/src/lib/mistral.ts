@@ -6,7 +6,7 @@ const MODEL = "mistral-small-latest";
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface CategorizationResult {
-  category: "primary" | "social" | "updates" | "promotions" | "forums";
+  category: "primary" | "internal" | "notifications" | "newsletter";
   folder: "inbox" | "spam" | "trash";
   matchedTagIds: string[];   // IDs of existing tags that apply
   newTags: { name: string; color: string }[]; // new tags to create (only if no existing tag fits)
@@ -50,12 +50,11 @@ export async function categorizeEmail(
         content: `You are an email classification engine. Analyze the email and return ONLY a JSON object — no markdown, no explanation.
 
 Rules:
-1. "category": one of "primary", "social", "updates", "promotions", "forums"
+1. "category": one of "primary", "internal", "notifications", "newsletter"
    - primary: personal, work, or direct correspondence
-   - social: social networks, friend invites
-   - updates: receipts, shipping, account alerts, app notifications
-   - promotions: marketing, newsletters, offers, discounts
-   - forums: mailing lists, GitHub notifications, community digests
+   - internal: messages from within the same organisation (same domain)
+   - notifications: account alerts, app notifications, receipts, shipping updates, social network notices
+   - newsletter: marketing, newsletters, offers, mailing lists, community digests, promotional emails
 
 2. "folder": use "spam" for ANY of the following — otherwise use "inbox":
    - Phishing signals: suspicious URLs (domain doesn't match the claimed sender), urgency + credential harvesting, mismatched sender identity
@@ -92,8 +91,18 @@ Return exactly this shape:
   const raw = response.choices?.[0]?.message?.content ?? "{}";
   const parsed = JSON.parse(typeof raw === "string" ? raw : JSON.stringify(raw));
 
+  const VALID_CATEGORIES = new Set(["primary", "internal", "notifications", "newsletter"]);
+  const CATEGORY_REMAP: Record<string, string> = {
+    updates: "notifications",
+    social: "notifications",
+    promotions: "newsletter",
+    forums: "newsletter",
+  };
+  const rawCategory = parsed.category ?? "primary";
+  const mappedCategory = CATEGORY_REMAP[rawCategory] ?? rawCategory;
+
   return {
-    category: parsed.category ?? "primary",
+    category: (VALID_CATEGORIES.has(mappedCategory) ? mappedCategory : "primary") as CategorizationResult["category"],
     folder: parsed.folder ?? "inbox",
     matchedTagIds: Array.isArray(parsed.matchedTagIds) ? parsed.matchedTagIds : [],
     newTags: Array.isArray(parsed.newTags) ? parsed.newTags : [],

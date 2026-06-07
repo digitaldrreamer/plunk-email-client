@@ -78,7 +78,7 @@ router.post("/inbound", async (req, res) => {
         const existingTags = await db.select({ id: tags.id, name: tags.name }).from(tags);
         const ai = await categorizeEmail(event.subject, bodyText, existingTags);
 
-        category = ai.category as StoredEmail["category"];
+        category = ai.category;
         if (ai.folder === "spam") folder = "spam";
 
         tagIds = ai.matchedTagIds.filter((id) => existingTags.some((t) => t.id === id));
