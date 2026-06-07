@@ -90,6 +90,18 @@ app.listen(PORT, async () => {
       AND e.thread_id != c.canonical_thread_id
   `);
 
+  // Remap any emails stored with old Mistral Gmail-style category names
+  await db.execute(sql`
+    UPDATE emails SET category = CASE category
+      WHEN 'updates'    THEN 'notifications'
+      WHEN 'social'     THEN 'notifications'
+      WHEN 'promotions' THEN 'newsletter'
+      WHEN 'forums'     THEN 'newsletter'
+      ELSE category
+    END
+    WHERE category IN ('updates', 'social', 'promotions', 'forums')
+  `);
+
   await seedTags();
 
   if (!process.env.PLUNK_SECRET_KEY) console.warn("⚠  PLUNK_SECRET_KEY not set — email sending will fail");
