@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ImageIcon, ImageOffIcon, SunIcon, MoonIcon, MonitorIcon } from "lucide-react";
+import { ImageIcon, ImageOffIcon, SunIcon, MoonIcon, MonitorIcon, EllipsisIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "next-themes";
 
@@ -126,6 +126,31 @@ function restoreRemoteImages(html: string): string {
   );
 }
 
+// Detect and split quoted reply history from the new message content.
+// Handles Gmail (div.gmail_quote), Outlook (div#divRplyFwdMsg), RFC blockquote[cite],
+// and the plain-text "On Mon, Jun 6... wrote:" separator.
+function splitEmailQuote(html: string): { body: string; quote: string | null } {
+  const markers: RegExp[] = [
+    /<div[^>]+class=["'][^"']*gmail_quote[^"']*["']/i,
+    /<div[^>]+id=["']divRplyFwdMsg["']/i,
+    /<blockquote[^>]+type=["']cite["']/i,
+  ];
+  for (const marker of markers) {
+    const idx = html.search(marker);
+    if (idx !== -1) {
+      const body = html.slice(0, idx).replace(/(<br\s*\/?>\s*){2,}$/i, "").trimEnd();
+      return { body, quote: html.slice(idx) };
+    }
+  }
+  // Plain-text fallback: "On Mon, Jun 6, 2026, Name <email> wrote:"
+  const textIdx = html.search(/On\s+\w+,\s+\w{3}\s+\d{1,2},\s+\d{4}/);
+  if (textIdx !== -1) {
+    const body = html.slice(0, textIdx).replace(/(<br\s*\/?>\s*){2,}$/i, "").trimEnd();
+    return { body, quote: html.slice(textIdx) };
+  }
+  return { body: html, quote: null };
+}
+
 function buildDoc(rawHtml: string, showImages: boolean): string {
   const html = showImages ? restoreRemoteImages(rawHtml) : stripRemoteImages(rawHtml);
   const baseCss = buildBaseCss();
@@ -157,20 +182,25 @@ export function EmailBodyFrame({ html, isDangerous = false, threatUrls = [] }: P
   const [loaded, setLoaded]         = useState(false);
   const [showImages, setShowImages] = useState(false);
   const [emailTheme, setEmailTheme] = useState<EmailTheme>("auto");
+  const [showQuote, setShowQuote] = useState(false);
 
   const { resolvedTheme } = useTheme();
   const appIsDark = resolvedTheme === "dark";
   const isDark = emailTheme === "dark" || (emailTheme === "auto" && appIsDark);
 
   const processedHtml = isDangerous ? applyDangerousOverlay(html, threatUrls) : html;
+  const { body: quoteBody, quote: quotedHtml } = splitEmailQuote(processedHtml);
+  const hasQuote = quotedHtml !== null;
+  const displayHtml = hasQuote && !showQuote ? quoteBody : processedHtml;
   // srcdoc never changes on theme toggle — dark mode is applied imperatively via DOM
-  const srcdoc = buildDoc(processedHtml, showImages);
+  const srcdoc = buildDoc(displayHtml, showImages);
 
   useEffect(() => {
     setHeight(160);
     setLoaded(false);
     setShowImages(false);
     setEmailTheme("auto");
+    setShowQuote(false);
   }, [html]);
 
   // Inject / remove the dark-mode stylesheet into the iframe's document imperatively.
@@ -271,6 +301,18 @@ export function EmailBodyFrame({ html, isDangerous = false, threatUrls = [] }: P
         title="Email message"
         onLoad={onLoad}
       />
+
+      {hasQuote && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="mt-1 h-6 gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+          onClick={() => setShowQuote((v) => !v)}
+        >
+          <EllipsisIcon className="size-3" />
+          {showQuote ? "Hide quoted text" : "Show quoted text"}
+        </Button>
+      )}
     </div>
   );
 }
