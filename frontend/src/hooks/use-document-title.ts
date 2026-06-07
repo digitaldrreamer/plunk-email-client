@@ -20,7 +20,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 export function useDocumentTitle() {
-  const { currentFolder, currentCategory, selectedThreadId, getThread } = useEmailStore();
+  const { currentFolder, activeCategories, selectedThreadId, getThread } = useEmailStore();
 
   useEffect(() => {
     let title = "reclear";
@@ -34,11 +34,14 @@ export function useDocumentTitle() {
         title = `${folderLabel} · reclear`;
       }
     } else if (currentFolder === "inbox") {
-      title = `${CATEGORY_LABELS[currentCategory] ?? currentCategory} · Inbox · reclear`;
+      const label = activeCategories.length === 1
+        ? (CATEGORY_LABELS[activeCategories[0]] ?? activeCategories[0])
+        : "Inbox";
+      title = `${label} · reclear`;
     } else {
       title = `${folderLabel} · reclear`;
     }
 
     document.title = title;
-  }, [currentFolder, currentCategory, selectedThreadId, getThread]);
+  }, [currentFolder, activeCategories, selectedThreadId, getThread]);
 }

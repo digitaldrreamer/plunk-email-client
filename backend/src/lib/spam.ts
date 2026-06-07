@@ -1,10 +1,25 @@
 // Two-layer spam filtering — mirrors tranche's approach:
 // 1. Plunk inbound verdicts (spamVerdict, virusVerdict) — FAIL = drop
-// 2. Postmark SpamAssassin secondary check — score ≥ 5.0 = drop
+// 2. Postmark SpamAssassin secondary check — score ≥ 8.0 = drop
 //    On any network/parse error we return score 0 so bad checks never silently drop mail.
 
 const POSTMARK_SPAM_URL = "https://spamcheck.postmarkapp.com/filter";
-const SPAM_SCORE_THRESHOLD = 5.0;
+const SPAM_SCORE_THRESHOLD = 8.0;
+
+// Senders whose domain is in this list bypass the SpamAssassin score check.
+// Still subject to Plunk hard-fail verdicts.
+const TRUSTED_SENDER_DOMAINS = new Set([
+  "youtrack.cloud",
+  "mail.youtrack.cloud",
+  "jetbrains.com",
+  "github.com",
+  "gitlab.com",
+  "atlassian.com",
+  "jira.com",
+  "notion.so",
+  "slack.com",
+  "linear.app",
+]);
 
 export type Verdict = "PASS" | "FAIL" | "GRAY" | "PROCESSING_FAILED";
 
@@ -26,6 +41,12 @@ export async function postmarkSpamScore(rawEmailBody: string): Promise<number> {
   } catch {
     return 0;
   }
+}
+
+export function isTrustedSender(fromEmail: string): boolean {
+  const domain = fromEmail.split("@")[1]?.toLowerCase() ?? "";
+  // match exact domain or any subdomain
+  return [...TRUSTED_SENDER_DOMAINS].some((d) => domain === d || domain.endsWith(`.${d}`));
 }
 
 export function isSpam(score: number): boolean {

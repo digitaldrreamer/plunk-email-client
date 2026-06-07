@@ -119,7 +119,7 @@ interface EmailStore {
   loading: boolean;
   selectedThreadId: string | null;
   currentFolder: Folder;
-  currentCategory: Category;
+  activeCategories: Category[];
   filter: Filter;
   activeTagFilter: string | null;
   composing: boolean;
@@ -139,7 +139,7 @@ interface EmailStore {
   // Navigation
   selectThread: (id: string | null) => void;
   setFolder: (folder: Folder) => void;
-  setCategory: (category: Category) => void;
+  toggleCategory: (category: Category) => void;
   setFilter: (filter: Filter) => void;
   setTagFilter: (tagId: string | null) => void;
 
@@ -172,7 +172,7 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
   loading: false,
   selectedThreadId: null,
   currentFolder: "inbox",
-  currentCategory: "primary",
+  activeCategories: ["primary", "internal", "notifications", "newsletter"] as Category[],
   filter: "all",
   activeTagFilter: null,
   composing: false,
@@ -211,7 +211,7 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
   // ── Derived ──────────────────────────────────────────────────────────────────
 
   visibleThreads: () => {
-    const { emails, currentFolder, currentCategory, filter, activeTagFilter } = get();
+    const { emails, currentFolder, activeCategories, filter, activeTagFilter } = get();
 
     const groups = new Map<string, Email[]>();
     for (const email of emails) {
@@ -224,7 +224,8 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
 
     threads = threads.filter((t) => t.folder === currentFolder);
     if (currentFolder === "inbox") {
-      threads = threads.filter((t) => t.category === currentCategory);
+      const active = new Set(activeCategories);
+      threads = threads.filter((t) => active.has(t.category));
     }
     if (filter === "unread") threads = threads.filter((t) => t.unreadCount > 0);
     if (filter === "starred") threads = threads.filter((t) => t.isStarred);
@@ -268,8 +269,14 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
   setFolder: (folder) =>
     set({ currentFolder: folder, selectedThreadId: null, filter: "all", activeTagFilter: null }),
 
-  setCategory: (category) =>
-    set({ currentCategory: category, selectedThreadId: null, filter: "all" }),
+  toggleCategory: (category) =>
+    set((state) => {
+      const current = state.activeCategories;
+      const next = current.includes(category)
+        ? current.filter((c) => c !== category)
+        : [...current, category];
+      return { activeCategories: next.length ? next : current, selectedThreadId: null };
+    }),
 
   setFilter: (filter) => set({ filter }),
 

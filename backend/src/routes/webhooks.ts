@@ -6,7 +6,7 @@ import { tags } from "../db/schema";
 import { logger, describeError } from "../lib/logger";
 import { addEmail, updateEmail, updateEmailByPlunkId, getEmailByPlunkId, findThreadIdBySubject, STATUS_RANK, type StoredEmail } from "../lib/store";
 import { sseEmit } from "../lib/sse";
-import { isHardFail, postmarkSpamScore, isSpam, type Verdict } from "../lib/spam";
+import { isHardFail, postmarkSpamScore, isSpam, isTrustedSender, type Verdict } from "../lib/spam";
 import { categorizeEmail } from "../lib/mistral";
 import { checkUrlSafety } from "../lib/safe-browsing";
 import { upsertContact, markContactBounced, markContactComplained } from "../lib/contacts";
@@ -55,7 +55,7 @@ router.post("/inbound", async (req, res) => {
     }
 
     const rawForSpam = `From: ${event.fromHeader ?? event.from}\nSubject: ${event.subject}\n\n${event.body ?? ""}`;
-    const score = await postmarkSpamScore(rawForSpam);
+    const score = isTrustedSender(event.from) ? 0 : await postmarkSpamScore(rawForSpam);
     if (isSpam(score)) {
       logger.warn("Inbound: dropped by spam score", { action: "inbound_drop", reason: "spam_score", score, messageId: event.messageId });
       return res.status(200).json({ status: "dropped: spam score", score });

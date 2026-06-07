@@ -180,8 +180,8 @@ function SkeletonRow() {
 export function EmailList() {
   const {
     currentFolder,
-    currentCategory,
-    setCategory,
+    activeCategories,
+    toggleCategory,
     selectedThreadId,
     selectThread,
     toggleStarThread,
@@ -327,49 +327,36 @@ export function EmailList() {
             </div>
           </div>
 
-          {/* Category tabs — inbox only */}
+          {/* Category filter badges — inbox only */}
           {isInbox && (
-            <div className="flex border-t border-border overflow-x-auto">
+            <div className="flex flex-wrap gap-1.5 px-3 py-2 border-t border-border">
               {CATEGORIES.map(({ id, label, icon: Icon, danger }) => {
                 const count = unreadCount("inbox", id);
-                const isActive = currentCategory === id;
+                const isActive = activeCategories.includes(id);
                 return (
                   <button
                     key={id}
-                    onClick={() => setCategory(id)}
+                    onClick={() => toggleCategory(id)}
                     className={cn(
-                      "flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] font-medium transition-colors border-b-2 min-w-[60px]",
+                      "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium transition-all border",
                       danger
                         ? isActive
-                          ? "border-red-500 text-red-600 dark:text-red-400 bg-red-50/50 dark:bg-red-950/20"
-                          : "border-transparent text-red-500/60 hover:text-red-500 hover:bg-red-50/40 dark:hover:bg-red-950/20"
+                          ? "bg-red-50 dark:bg-red-950/40 border-red-300 dark:border-red-800 text-red-600 dark:text-red-400"
+                          : "bg-transparent border-border text-red-400/50 dark:text-red-600/40 hover:border-red-300 hover:text-red-500"
                         : isActive
-                        ? "border-primary text-foreground"
-                        : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/40"
+                        ? "bg-primary/10 border-primary/30 text-primary dark:text-primary"
+                        : "bg-transparent border-border text-muted-foreground hover:border-muted-foreground/50 hover:text-foreground"
                     )}
                   >
-                    <Icon className={cn("size-3.5", danger && "text-current")} />
-                    <div className="hidden sm:flex items-center gap-1">
-                      <span>{label}</span>
-                      {count > 0 && (
-                        <span className={cn(
-                          "flex items-center justify-center rounded-full px-1 min-w-[14px] h-3.5 text-[8px] font-bold leading-none",
-                          danger
-                            ? "bg-red-500 text-white"
-                            : isActive
-                            ? "bg-primary text-primary-foreground"
-                            : "bg-primary text-primary-foreground"
-                        )}>
-                          {count > 99 ? "99+" : count}
-                        </span>
-                      )}
-                    </div>
-                    {/* mobile: dot indicator for unreads on inactive tabs */}
+                    <Icon className="size-3" />
+                    <span>{label}</span>
                     {count > 0 && (
                       <span className={cn(
-                        "sm:hidden size-1.5 rounded-full",
-                        danger ? "bg-red-500" : "bg-primary"
-                      )} />
+                        "flex items-center justify-center rounded-full px-1 min-w-[14px] h-3.5 text-[8px] font-bold leading-none",
+                        danger ? "bg-red-500 text-white" : "bg-primary text-primary-foreground"
+                      )}>
+                        {count > 99 ? "99+" : count}
+                      </span>
                     )}
                   </button>
                 );
@@ -392,7 +379,7 @@ export function EmailList() {
           ) : threads.length === 0 ? (
             <div className="flex h-full items-center justify-center text-center px-6">
               <div className="space-y-1">
-                {currentCategory === "dangerous" ? (
+                {activeCategories.length === 1 && activeCategories[0] === "dangerous" ? (
                   <>
                     <ShieldAlertIcon className="size-8 text-red-300 mx-auto" />
                     <p className="text-sm text-muted-foreground">No dangerous emails</p>
