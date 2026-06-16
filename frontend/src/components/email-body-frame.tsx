@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ImageIcon, ImageOffIcon, SunIcon, MoonIcon, MonitorIcon, EllipsisIcon } from "lucide-react";
+import { ImageIcon, ImageOffIcon, SunIcon, MoonIcon, MonitorIcon, EllipsisIcon, ExternalLinkIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useTheme } from "next-themes";
 
 type EmailTheme = "auto" | "light" | "dark";
@@ -182,7 +183,8 @@ export function EmailBodyFrame({ html, isDangerous = false, threatUrls = [] }: P
   const [loaded, setLoaded]         = useState(false);
   const [showImages, setShowImages] = useState(false);
   const [emailTheme, setEmailTheme] = useState<EmailTheme>("auto");
-  const [showQuote, setShowQuote] = useState(false);
+  const [showQuote, setShowQuote]   = useState(false);
+  const [pendingUrl, setPendingUrl] = useState<string | null>(null);
 
   const { resolvedTheme } = useTheme();
   const appIsDark = resolvedTheme === "dark";
@@ -226,6 +228,17 @@ export function EmailBodyFrame({ html, isDangerous = false, threatUrls = [] }: P
   const onLoad = useCallback(() => {
     const doc = iframeRef.current?.contentDocument;
     if (!doc) return;
+
+    // Intercept all link clicks — show a confirmation dialog instead of navigating in-frame
+    doc.addEventListener("click", (e) => {
+      const anchor = (e.target as Element).closest("a[href]");
+      if (!anchor) return;
+      const href = anchor.getAttribute("href") ?? "";
+      if (!href || href.startsWith("#") || href.startsWith("mailto:") || href.startsWith("tel:")) return;
+      e.preventDefault();
+      setPendingUrl(href);
+    });
+
     const h = Math.max(80, doc.documentElement.scrollHeight, doc.body?.scrollHeight ?? 0);
     setHeight(h);
     setLoaded(true);
@@ -313,6 +326,31 @@ export function EmailBodyFrame({ html, isDangerous = false, threatUrls = [] }: P
           {showQuote ? "Hide quoted text" : "Show quoted text"}
         </Button>
       )}
+
+      <Dialog open={pendingUrl !== null} onOpenChange={(open) => { if (!open) setPendingUrl(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ExternalLinkIcon className="size-4" />
+              Open link in new tab?
+            </DialogTitle>
+            <DialogDescription className="break-all text-xs mt-2 font-mono bg-muted rounded px-2 py-1.5">
+              {pendingUrl}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setPendingUrl(null)}>Cancel</Button>
+            <Button
+              onClick={() => {
+                if (pendingUrl) window.open(pendingUrl, "_blank", "noopener,noreferrer");
+                setPendingUrl(null);
+              }}
+            >
+              Open link
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
