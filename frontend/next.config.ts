@@ -5,6 +5,7 @@ const API_URL = process.env.API_URL || "https://api.mail.reclear.io";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  outputFileTracingRoot: process.cwd(),
   async rewrites() {
     return [
       {
