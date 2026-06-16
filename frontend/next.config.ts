@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 // Server-side only — not exposed to the browser
-const API_URL = process.env.API_URL || "https://api.mail.reclear.io";
+const API_URL = process.env.API_URL || "https://api-mail.reclear.io";
 
 const nextConfig: NextConfig = {
   output: "standalone",

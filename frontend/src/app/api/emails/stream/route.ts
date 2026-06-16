@@ -1,6 +1,6 @@
 import { type NextRequest } from "next/server";
 
-const API_URL = process.env.API_URL || "https://api.mail.reclear.io";
+const API_URL = process.env.API_URL || "https://api-mail.reclear.io";
 
 export const dynamic = "force-dynamic";
 
